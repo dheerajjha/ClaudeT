@@ -14,11 +14,10 @@ class TunnelServer {
     
     this.app = express();
     this.server = http.createServer(this.app);
-    this.wss = new WebSocket.Server({ port: this.tunnelPort });
+    this.wss = null; // Will be created in start()
     this.tunnelClients = new Map();
     
     this.setupMiddleware();
-    this.setupWebSocketServer();
     this.setupProxyRoutes();
   }
 
@@ -219,9 +218,18 @@ class TunnelServer {
   }
 
   start() {
+    // Start WebSocket server on separate port
+    const tunnelServer = http.createServer();
+    this.wss = new WebSocket.Server({ server: tunnelServer });
+    this.setupWebSocketServer();
+    
+    tunnelServer.listen(this.config.tunnelPort, () => {
+      console.log(`🔌 WebSocket server running on port ${this.config.tunnelPort}`);
+    });
+    
+    // Start HTTP server
     this.server.listen(this.config.serverPort, () => {
       console.log(`🚀 Tunnel server running on port ${this.config.serverPort}`);
-      console.log(`🔌 WebSocket server running on port ${this.config.tunnelPort}`);
       console.log(`📊 Dashboard: http://localhost:${this.config.serverPort}/dashboard`);
     });
   }

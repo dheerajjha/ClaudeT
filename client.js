@@ -3,12 +3,13 @@ const axios = require('axios');
 const readline = require('readline');
 
 class TunnelClient {
-  constructor(localPort = 3000) {
+  constructor(localPort = 3000, suggestedSubdomain = null) {
     this.config = {
       serverHost: '20.193.143.179',
       serverPort: 8080,
       localPort: localPort,
-      localHost: 'localhost'
+      localHost: 'localhost',
+      suggestedSubdomain: suggestedSubdomain
     };
     
     this.ws = null;
@@ -34,7 +35,8 @@ class TunnelClient {
       this.sendMessage({
         type: 'config',
         localPort: this.config.localPort,
-        localHost: this.config.localHost
+        localHost: this.config.localHost,
+        suggestedSubdomain: this.config.suggestedSubdomain
       });
     });
 
@@ -67,6 +69,16 @@ class TunnelClient {
         this.subdomainUrl = data.subdomainUrl;
         console.log(`🌐 Tunnel established!`);
         console.log(`📍 Tunnel ID: ${this.tunnelId}`);
+        
+        // Show if custom subdomain was used
+        if (this.config.suggestedSubdomain) {
+          if (this.tunnelId === this.config.suggestedSubdomain.toLowerCase().replace(/[^a-z0-9-]/g, '')) {
+            console.log(`✨ Using your custom subdomain: ${this.tunnelId}`);
+          } else {
+            console.log(`⚠️  Custom subdomain unavailable, using: ${this.tunnelId}`);
+          }
+        }
+        
         console.log(`🔗 Path URL: ${this.publicUrl}`);
         console.log(`🌐 Subdomain URL: ${this.subdomainUrl} (Recommended - works like ngrok)`);
         console.log(`⬅️  Local: http://${this.config.localHost}:${this.config.localPort}`);
@@ -191,14 +203,19 @@ async function startClient() {
   console.log('🚀 Mini Tunnel Client\n');
   
   const localPort = await ask('Enter local port to tunnel (default 3000): ') || '3000';
+  const suggestedSubdomain = await ask('Enter preferred subdomain (optional, e.g., "myapp"): ') || null;
   
   rl.close();
 
   console.log('\n📋 Configuration:');
   console.log(`   WebSocket: 20.193.143.179:8080 (direct)`);
-  console.log(`   Local: localhost:${localPort}\n`);
+  console.log(`   Local: localhost:${localPort}`);
+  if (suggestedSubdomain) {
+    console.log(`   Requested: ${suggestedSubdomain}.grabr.cc`);
+  }
+  console.log('');
 
-  const client = new TunnelClient(parseInt(localPort));
+  const client = new TunnelClient(parseInt(localPort), suggestedSubdomain);
 
   // Test local server first
   await client.testLocalServer();

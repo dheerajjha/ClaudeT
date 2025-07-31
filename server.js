@@ -61,7 +61,7 @@ class TunnelServer {
 
   setupWebSocketServer() {
     this.wss.on('connection', (ws, req) => {
-      const tunnelId = this.generateTunnelId();
+      let tunnelId = this.generateTunnelId();
       console.log(`🔗 New tunnel connection: ${tunnelId}`);
 
       const client = {
@@ -77,7 +77,7 @@ class TunnelServer {
       ws.on('message', (message) => {
         try {
           const data = JSON.parse(message);
-          this.handleTunnelMessage(tunnelId, data);
+          this.handleTunnelMessage(client.id, data, client);
         } catch (error) {
           console.error('Invalid message from client:', error);
         }
@@ -103,12 +103,27 @@ class TunnelServer {
     });
   }
 
-  handleTunnelMessage(tunnelId, data) {
-    const client = this.tunnelClients.get(tunnelId);
+  handleTunnelMessage(tunnelId, data, client) {
     if (!client) return;
 
     switch (data.type) {
       case 'config':
+        // Handle subdomain suggestion
+        if (data.suggestedSubdomain) {
+          const suggested = data.suggestedSubdomain.toLowerCase().replace(/[^a-z0-9-]/g, '');
+          if (suggested && suggested.length > 0 && !this.tunnelClients.has(suggested)) {
+            // Remove old tunnelId entry and use suggested subdomain
+            this.tunnelClients.delete(tunnelId);
+            const newTunnelId = suggested;
+            client.id = newTunnelId;
+            this.tunnelClients.set(newTunnelId, client);
+            console.log(`✨ Using custom subdomain: ${newTunnelId}`);
+            tunnelId = newTunnelId;
+          } else if (this.tunnelClients.has(suggested)) {
+            console.log(`⚠️  Subdomain '${suggested}' already in use, using random: ${tunnelId}`);
+          }
+        }
+        
         client.localPort = data.localPort;
         client.localHost = data.localHost || 'localhost';
         console.log(`📋 Tunnel ${tunnelId} configured for ${client.localHost}:${client.localPort}`);

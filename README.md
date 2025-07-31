@@ -4,7 +4,7 @@ Your own ngrok alternative - expose local services to the internet with custom d
 
 ## ✨ Features
 
-- 🌐 **Custom Domain**: `https://abc123.grabr.cc/`
+- 🌐 **Custom Subdomains**: `https://myapp.grabr.cc/` (your choice!)
 - 🔒 **HTTPS Everywhere**: Cloudflare SSL
 - 📊 **Dashboard**: `https://grabr.cc/dashboard`
 - 🔧 **Simple Setup**: Two commands to start
@@ -22,6 +22,7 @@ sudo ./start-server.sh
 ```bash
 ./start-client.sh
 # Enter local port (e.g., 3000, 3008)
+# Enter preferred subdomain (e.g., "myapp" → myapp.grabr.cc)
 ```
 
 ## 🌐 URLs

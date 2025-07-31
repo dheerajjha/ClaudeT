@@ -65,9 +65,11 @@ class TunnelClient {
       case 'connected':
         this.tunnelId = data.tunnelId;
         this.publicUrl = data.publicUrl;
+        this.subdomainUrl = data.subdomainUrl;
         console.log(`🌐 Tunnel established!`);
         console.log(`📍 Tunnel ID: ${this.tunnelId}`);
-        console.log(`🔗 Public URL: ${this.publicUrl}`);
+        console.log(`🔗 Path URL: ${this.publicUrl}`);
+        console.log(`🌐 Subdomain URL: ${this.subdomainUrl} (Recommended - works like ngrok)`);
         console.log(`⬅️  Local: http://${this.config.localHost}:${this.config.localPort}`);
         break;
 

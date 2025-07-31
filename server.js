@@ -96,7 +96,8 @@ class TunnelServer {
       ws.send(JSON.stringify({
         type: 'connected',
         tunnelId,
-        publicUrl: `http://[VM-IP]:${this.config.serverPort}/${tunnelId}`
+        publicUrl: `http://[VM-IP]:${this.config.serverPort}/${tunnelId}/`,
+        subdomainUrl: `http://${tunnelId}.[VM-IP]:${this.config.serverPort}/`
       }));
     });
   }
@@ -155,6 +156,22 @@ class TunnelServer {
   }
 
   setupProxyRoutes() {
+    // Subdomain-based routing (like ngrok)
+    this.app.use((req, res, next) => {
+      const host = req.get('host') || '';
+      const subdomain = host.split('.')[0];
+      
+      // Check if this is a subdomain request (tunnel-based)
+      const tunnelClient = this.tunnelClients.get(subdomain);
+      if (tunnelClient && tunnelClient.ws.readyState === WebSocket.OPEN) {
+        console.log(`🌐 Subdomain routing: ${host}${req.path} → tunnel ${subdomain}`);
+        this.forwardRequestToTunnel(subdomain, req, res, true);
+        return;
+      }
+      
+      next();
+    });
+
     // Root path handler - show server info
     this.app.get('/', (req, res) => {
       const activeTunnels = Array.from(this.tunnelClients.entries())
@@ -205,11 +222,11 @@ class TunnelServer {
       }
     });
 
-    // SIMPLE CATCH-ALL: Forward EVERYTHING ELSE to the active tunnel
-    this.app.use('*', (req, res) => {
-      // Skip the specific server endpoints
+    // Enhanced catch-all with better priority handling
+    this.app.use((req, res, next) => {
+      // Skip server endpoints
       if (req.path === '/health' || req.path === '/dashboard') {
-        return res.status(404).json({ error: 'Endpoint not found' });
+        return next();
       }
 
       // Find any active tunnel and forward to it
@@ -218,15 +235,17 @@ class TunnelServer {
       
       if (activeTunnels.length > 0) {
         const [tunnelId] = activeTunnels[0];
-        console.log(`🔄 Forwarding ${req.method} ${req.path} to tunnel ${tunnelId}`);
+        console.log(`🔄 Catch-all: ${req.method} ${req.path} → tunnel ${tunnelId}`);
         this.forwardRequestToTunnel(tunnelId, req, res, true); // Keep original URL
-      } else {
-        res.status(404).json({ 
-          error: 'No active tunnels available',
-          path: req.path,
-          method: req.method
-        });
+        return;
       }
+      
+      // No active tunnels
+      res.status(404).json({ 
+        error: 'No active tunnels available',
+        path: req.path,
+        method: req.method
+      });
     });
   }
 

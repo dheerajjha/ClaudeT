@@ -101,9 +101,13 @@ class TunnelClient {
   }
 
   async handleTunnelRequest(request) {
+    console.log(`📥 Received: ${request.method} ${request.url}`);
+    
     try {
       // Make request to local server
       const response = await this.makeLocalRequest(request);
+      
+      console.log(`📤 Sending response: ${response.statusCode} (${request.requestId})`);
       
       // Send response back through tunnel
       this.sendMessage({
@@ -132,13 +136,22 @@ class TunnelClient {
     return new Promise((resolve, reject) => {
       const url = new URL(request.url, `http://${this.config.localHost}:${this.config.localPort}`);
       
+      // Clean up headers - remove problematic ones
+      const cleanHeaders = { ...request.headers };
+      delete cleanHeaders['host'];
+      delete cleanHeaders['connection'];
+      delete cleanHeaders['upgrade'];
+      delete cleanHeaders['sec-websocket-key'];
+      delete cleanHeaders['sec-websocket-version'];
+      delete cleanHeaders['sec-websocket-extensions'];
+      
       const options = {
         hostname: this.config.localHost,
         port: this.config.localPort,
         path: url.pathname + url.search,
         method: request.method,
         headers: {
-          ...request.headers,
+          ...cleanHeaders,
           host: `${this.config.localHost}:${this.config.localPort}` // Override host header
         },
         timeout: 25000

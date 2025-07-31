@@ -27,6 +27,11 @@ class TunnelServer {
     // Enable trust proxy for Cloudflare
     this.app.set('trust proxy', true);
     
+    // Parse request bodies
+    this.app.use(express.json({ limit: '10mb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+    this.app.use(express.raw({ type: '*/*', limit: '10mb' }));
+    
     // Health check
     this.app.get('/health', (req, res) => {
       res.json({
@@ -203,6 +208,7 @@ class TunnelServer {
       body: req.body
     };
 
+    console.log(`📤 Forwarding: ${req.method} ${req.url} → ${tunnel.id}`);
     tunnel.ws.send(JSON.stringify(requestData));
   }
 

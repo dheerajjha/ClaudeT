@@ -6,7 +6,9 @@
   "scripts": {
     "server": "node tunnel-server.js",
     "client": "node tunnel-client.js",
-    "start": "node tunnel-server.js"
+    "start": "node tunnel-server.js",
+    "wstunnel-server": "node wstunnel-server.js",
+    "wstunnel-client": "node wstunnel-client.js"
   },
   "keywords": [
     "tunnel",

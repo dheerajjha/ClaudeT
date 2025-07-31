@@ -4,12 +4,7 @@
 echo "🚀 Starting Mini Tunnel Server..."
 echo ""
 
-# Check if git command exists (fix the gi issue)
-if command -v git &> /dev/null; then
-    echo "📦 Git available for updates"
-else
-    echo "⚠️  Git not found - manual updates only"
-fi
+git pull
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then

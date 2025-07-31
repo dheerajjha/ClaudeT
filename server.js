@@ -93,13 +93,7 @@ class TunnelServer {
         this.tunnelClients.delete(tunnelId);
       });
 
-      // Send connection confirmation  
-      ws.send(JSON.stringify({
-        type: 'connected',
-        tunnelId,
-        publicUrl: `http://grabr.cc:${this.config.serverPort}/${tunnelId}/`,
-        subdomainUrl: `https://${tunnelId}.grabr.cc/`
-      }));
+      // Connection confirmation will be sent after config is received
     });
   }
 
@@ -127,6 +121,14 @@ class TunnelServer {
         client.localPort = data.localPort;
         client.localHost = data.localHost || 'localhost';
         console.log(`📋 Tunnel ${tunnelId} configured for ${client.localHost}:${client.localPort}`);
+        
+        // Send connection confirmation after config is processed
+        client.ws.send(JSON.stringify({
+          type: 'connected',
+          tunnelId,
+          publicUrl: `http://grabr.cc:${this.config.serverPort}/${tunnelId}/`,
+          subdomainUrl: `https://${tunnelId}.grabr.cc/`
+        }));
         break;
       
       case 'response':

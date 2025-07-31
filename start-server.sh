@@ -46,4 +46,9 @@ echo ""
 
 # Start the server
 echo "🔥 Starting server..."
-node server.js 
+if [ "$SERVER_PORT" = "80" ]; then
+    echo "⚠️  Port 80 requires sudo privileges"
+    sudo node server.js
+else
+    node server.js
+fi 

@@ -318,6 +318,7 @@ class TunnelServer {
     this.server.listen(this.config.serverPort, () => {
       console.log(`🚀 Tunnel server running on port ${this.config.serverPort}`);
       console.log(`📊 Dashboard: http://localhost:${this.config.serverPort}/dashboard`);
+      console.log(`🌐 Public Dashboard: https://tunnel.grabr.cc/dashboard`);
     });
   }
 }

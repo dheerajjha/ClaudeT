@@ -37,8 +37,8 @@ echo ""
 
 # Test 2: Subdomain routing
 echo "🌐 Test 2: Subdomain routing"
-echo "Testing: $TUNNEL_ID.tunnel.grabr.cc (via Host header)"
-if curl -Is -H "Host: $TUNNEL_ID.tunnel.grabr.cc" http://20.193.143.179:8080/ | head -1 | grep -q "200 OK"; then
+echo "Testing: $TUNNEL_ID.grabr.cc (via Host header)"
+if curl -Is -H "Host: $TUNNEL_ID.grabr.cc" http://20.193.143.179:80/ | head -1 | grep -q "200 OK"; then
     echo "✅ Subdomain routing works"
 else
     echo "❌ Subdomain routing failed"
@@ -48,7 +48,7 @@ echo ""
 # Test 3: Asset loading via subdomain
 echo "📦 Test 3: Asset loading"
 echo "Testing: /assets/index-Et_ROl5E.js via subdomain"
-ASSET_SIZE=$(curl -s -H "Host: $TUNNEL_ID.tunnel.grabr.cc" http://20.193.143.179:8080/assets/index-Et_ROl5E.js | wc -c)
+ASSET_SIZE=$(curl -s -H "Host: $TUNNEL_ID.grabr.cc" http://20.193.143.179:80/assets/index-Et_ROl5E.js | wc -c)
 if [ "$ASSET_SIZE" -gt 1000 ]; then
     echo "✅ Asset loading works ($ASSET_SIZE bytes)"
 else
@@ -77,9 +77,9 @@ echo ""
 # Summary
 echo "📋 Summary:"
 echo "   Tunnel ID: $TUNNEL_ID"
-echo "   Path URL: http://20.193.143.179:8080/$TUNNEL_ID/"
-echo "   Subdomain URL: http://$TUNNEL_ID.tunnel.grabr.cc/"
-echo "   Dashboard: http://20.193.143.179:8080/dashboard"
+echo "   Path URL: http://20.193.143.179:80/$TUNNEL_ID/"
+echo "   Subdomain URL: https://$TUNNEL_ID.grabr.cc/"
+echo "   Dashboard: https://grabr.cc/dashboard"
 echo ""
 echo "🎉 Subdomain routing solves all asset loading issues!"
-echo "   Use: http://$TUNNEL_ID.tunnel.grabr.cc/ (once DNS is set up)" 
+echo "   Use: https://$TUNNEL_ID.grabr.cc/ (once DNS is set up)" 

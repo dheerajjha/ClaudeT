@@ -5,7 +5,7 @@
     "host": "0.0.0.0"
   },
   "client": {
-    "serverHost": "tunnel.grabr.cc",
+    "serverHost": "grabr.cc",
     "serverPort": 80,
     "localPort": 3000,
     "localHost": "localhost"

@@ -43,8 +43,7 @@ class TunnelServer {
         localHost: client.localHost,
         connectedAt: client.connectedAt,
         publicUrl: `http://grabr.cc:${this.config.serverPort}/${id}/`,
-        subdomainUrl: `https://${id}.tunnel.grabr.cc/`,
-        httpUrl: `http://${id}.tunnel.grabr.cc:8080/`
+        subdomainUrl: `https://${id}.grabr.cc/`
       }));
 
       res.json({
@@ -99,8 +98,7 @@ class TunnelServer {
         type: 'connected',
         tunnelId,
         publicUrl: `http://grabr.cc:${this.config.serverPort}/${tunnelId}/`,
-        subdomainUrl: `https://${tunnelId}.tunnel.grabr.cc/`,
-        httpUrl: `http://${tunnelId}.tunnel.grabr.cc:8080/`
+        subdomainUrl: `https://${tunnelId}.grabr.cc/`
       }));
     });
   }
@@ -318,7 +316,7 @@ class TunnelServer {
     this.server.listen(this.config.serverPort, () => {
       console.log(`🚀 HTTP server running on port ${this.config.serverPort} (via Cloudflare)`);
       console.log(`📊 Dashboard: http://localhost:${this.config.serverPort}/dashboard`);
-      console.log(`🌐 Public Dashboard: https://tunnel.grabr.cc/dashboard`);
+      console.log(`🌐 Public Dashboard: https://grabr.cc/dashboard`);
     });
   }
 }

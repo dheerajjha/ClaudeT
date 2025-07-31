@@ -326,10 +326,12 @@ class TunnelServer {
 // Start server if run directly
 if (require.main === module) {
   const config = {
-    serverPort: process.env.SERVER_PORT || 8080,
-    tunnelPort: process.env.TUNNEL_PORT || 8081
+    serverPort: parseInt(process.env.SERVER_PORT) || 8080,
+    tunnelPort: parseInt(process.env.TUNNEL_PORT) || 8081
   };
 
+  console.log(`🔧 Starting with config: HTTP=${config.serverPort}, WebSocket=${config.tunnelPort}`);
+  
   const server = new TunnelServer(config);
   server.start();
 }

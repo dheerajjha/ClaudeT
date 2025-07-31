@@ -6,7 +6,7 @@ class TunnelClient {
   constructor(localPort = 3000) {
     this.config = {
       serverHost: '20.193.143.179',
-      serverPort: 8080,
+      serverPort: 8081,
       localPort: localPort,
       localHost: 'localhost'
     };
@@ -195,7 +195,7 @@ async function startClient() {
   rl.close();
 
   console.log('\n📋 Configuration:');
-  console.log(`   WebSocket: 20.193.143.179:8080 (direct)`);
+  console.log(`   WebSocket: 20.193.143.179:8081 (direct)`);
   console.log(`   Local: localhost:${localPort}\n`);
 
   const client = new TunnelClient(parseInt(localPort));

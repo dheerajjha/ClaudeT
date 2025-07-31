@@ -161,11 +161,13 @@ class TunnelServer {
       const host = req.get('host') || '';
       const subdomain = host.split('.')[0];
       
+      console.log(`🔍 Debug: Host=${host}, Subdomain=${subdomain}`);
+      
       // Check if this is a subdomain request (tunnel-based)
       const tunnelClient = this.tunnelClients.get(subdomain);
       if (tunnelClient && tunnelClient.ws.readyState === WebSocket.OPEN) {
         console.log(`🌐 Subdomain routing: ${host}${req.path} → tunnel ${subdomain}`);
-        this.forwardRequestToTunnel(subdomain, req, res, true);
+        this.forwardRequestToTunnel(subdomain, req, res, false); // Use normal tunnel forwarding
         return;
       }
       

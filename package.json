@@ -8,7 +8,9 @@
     "client": "node tunnel-client.js",
     "start": "node tunnel-server.js",
     "wstunnel-server": "node wstunnel-server.js",
-    "wstunnel-client": "node wstunnel-client.js"
+    "wstunnel-client": "node wstunnel-client.js",
+    "wst-server": "node wstunnel-wrapper-server.js",
+    "wst-client": "node wstunnel-wrapper-client.js"
   },
   "keywords": [
     "tunnel",
@@ -29,3 +31,4 @@
     "node": ">=14.0.0"
   }
 }
+ 

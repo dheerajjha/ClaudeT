@@ -293,7 +293,16 @@ async function startClient() {
 
 // Start client if run directly
 if (require.main === module) {
-  startClient().catch(console.error);
+  // Quick test mode - skip all prompts
+  if (process.argv.includes('--quick')) {
+    console.log('🚀 Quick Test Mode - TCP Tunnel Client');
+    console.log('📋 Using defaults: localhost:3000 → claude.grabr.cc\n');
+    
+    const client = new TCPTunnelClient(3000, 'claude');
+    client.connect();
+  } else {
+    startClient().catch(console.error);
+  }
 }
 
 module.exports = TCPTunnelClient; 

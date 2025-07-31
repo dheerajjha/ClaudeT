@@ -8,6 +8,7 @@
     "client": "node client.js",
     "tcp-server": "node tcp-tunnel-server.js",
     "tcp-client": "node tcp-tunnel-client.js",
+    "quick-client": "node tcp-tunnel-client.js --quick",
     "start-server": "./start-server.sh",
     "start-client": "./start-client.sh"
   },

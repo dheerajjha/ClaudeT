@@ -53,6 +53,39 @@ class TCPTunnelServer {
   }
 
   setupRoutes() {
+    // Health check endpoint
+    this.app.get('/health', (req, res) => {
+      res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        activeTunnels: this.tunnelClients.size
+      });
+    });
+
+    // Dashboard endpoint
+    this.app.get('/dashboard', (req, res) => {
+      const tunnels = Array.from(this.tunnelClients.entries()).map(([id, client]) => ({
+        id,
+        connected: client.ws.readyState === WebSocket.OPEN,
+        localPort: client.localPort,
+        localHost: client.localHost,
+        connectedAt: client.connectedAt,
+        subdomainUrl: `https://${id}.grabr.cc/`
+      }));
+
+      res.json({
+        server: {
+          mode: 'TCP Tunnel',
+          serverPort: this.config.serverPort,
+          tunnelPort: this.config.tunnelPort
+        },
+        tunnels,
+        info: {
+          message: 'TCP tunnel server - forwards raw TCP traffic over WebSocket tunnels'
+        }
+      });
+    });
+
     // Catch-all route for subdomain-based tunneling
     this.app.use((req, res, next) => {
       const host = req.get('host') || '';

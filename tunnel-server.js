@@ -214,13 +214,21 @@ class TunnelServer {
 
   handleTunnelResponse(message) {
     const pending = this.pendingRequests.get(message.requestId);
-    if (!pending) return;
+    if (!pending) {
+      console.warn(`⚠️ No pending request found for ${message.requestId}`);
+      return;
+    }
 
     clearTimeout(pending.timeout);
     this.pendingRequests.delete(message.requestId);
 
     const { res } = pending;
-    if (res.headersSent) return;
+    if (res.headersSent) {
+      console.warn(`⚠️ Headers already sent for ${message.requestId}`);
+      return;
+    }
+
+    console.log(`📥 Received response: ${message.statusCode} (${message.requestId})`);
 
     try {
       // Set status and headers

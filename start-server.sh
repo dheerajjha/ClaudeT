@@ -1,6 +1,4 @@
-gi #!/bin/bash
-
-git pull
+#!/bin/bash
 
 # Mini Tunnel Server Startup Script
 echo "🚀 Starting Mini Tunnel Server..."

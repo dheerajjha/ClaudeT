@@ -91,7 +91,7 @@ class TunnelServer {
       ws.send(JSON.stringify({
         type: 'connected',
         tunnelId,
-        publicUrl: `http://your-vm-ip:${this.config.serverPort}/${tunnelId}`
+        publicUrl: `http://[VM-IP]:${this.config.serverPort}/${tunnelId}`
       }));
     });
   }

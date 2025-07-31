@@ -8,6 +8,7 @@ class TunnelServer {
   constructor(config = {}) {
     this.config = {
       serverPort: config.serverPort || 80,
+      tunnelPort: config.tunnelPort || 8080,
       ...config
     };
     
@@ -304,14 +305,18 @@ class TunnelServer {
 
 
   start() {
-    // Start WebSocket server on the same HTTP server
-    this.wss = new WebSocket.Server({ server: this.server });
+    // Start WebSocket server on separate port (direct connection)
+    const tunnelServer = http.createServer();
+    this.wss = new WebSocket.Server({ server: tunnelServer });
     this.setupWebSocketServer();
     
-    // Start single HTTP server (handles both HTTP and WebSocket)
+    tunnelServer.listen(this.config.tunnelPort, () => {
+      console.log(`🔌 WebSocket server running on port ${this.config.tunnelPort} (direct)`);
+    });
+    
+    // Start HTTP server (via Cloudflare)
     this.server.listen(this.config.serverPort, () => {
-      console.log(`🚀 Tunnel server running on port ${this.config.serverPort}`);
-      console.log(`🔌 WebSocket server running on port ${this.config.serverPort}`);
+      console.log(`🚀 HTTP server running on port ${this.config.serverPort} (via Cloudflare)`);
       console.log(`📊 Dashboard: http://localhost:${this.config.serverPort}/dashboard`);
       console.log(`🌐 Public Dashboard: https://tunnel.grabr.cc/dashboard`);
     });

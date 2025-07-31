@@ -5,8 +5,8 @@ const readline = require('readline');
 class TunnelClient {
   constructor(localPort = 3000) {
     this.config = {
-      serverHost: 'tunnel.grabr.cc',
-      serverPort: 80,
+      serverHost: '20.193.143.179',
+      serverPort: 8080,
       localPort: localPort,
       localHost: 'localhost'
     };
@@ -195,7 +195,7 @@ async function startClient() {
   rl.close();
 
   console.log('\n📋 Configuration:');
-  console.log(`   Server: tunnel.grabr.cc:80 (via Cloudflare)`);
+  console.log(`   WebSocket: 20.193.143.179:8080 (direct)`);
   console.log(`   Local: localhost:${localPort}\n`);
 
   const client = new TunnelClient(parseInt(localPort));

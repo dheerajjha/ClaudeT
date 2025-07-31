@@ -25,12 +25,15 @@ fi
 
 # Load configuration from config.json
 SERVER_PORT=$(node -p "require('./config.json').server.serverPort")
+TUNNEL_PORT=$(node -p "require('./config.json').server.tunnelPort")
 
 # Set environment variables
 export SERVER_PORT=${SERVER_PORT:-80}
+export TUNNEL_PORT=${TUNNEL_PORT:-8080}
 
 echo "📋 Configuration:"
-echo "   Server Port: $SERVER_PORT (HTTP + WebSocket)"
+echo "   HTTP Port: $SERVER_PORT (via Cloudflare)"
+echo "   WebSocket Port: $TUNNEL_PORT (direct)"
 echo "   Domain: grabr.cc"
 echo ""
 

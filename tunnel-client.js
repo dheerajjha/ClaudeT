@@ -102,6 +102,7 @@ class TunnelClient {
 
   async handleTunnelRequest(request) {
     console.log(`📥 Received: ${request.method} ${request.url}`);
+    console.log(`🔍 Full request URL: "${request.url}"`);
     
     try {
       // Make request to local server
@@ -163,15 +164,8 @@ class TunnelClient {
         path: options.path,
         headers: Object.keys(options.headers)
       });
-      
-      console.log(`🔧 Full headers:`, options.headers);
-      if (request.body) {
-        console.log(`🔧 Request body:`, typeof request.body, request.body.length || 'N/A');
-      }
 
       const req = http.request(options, (res) => {
-        console.log(`🔧 Local server response: ${res.statusCode} ${res.statusMessage}`);
-        console.log(`🔧 Response headers:`, Object.keys(res.headers));
         
         let body = '';
         

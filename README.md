@@ -97,6 +97,7 @@ const ws = new WebSocket('wss://myapp.grabr.cc/chat');
 
 ### 🧪 Test WebSocket Tunneling
 
+**Method 1: Web Browser (Recommended)**
 ```bash
 # Start the WebSocket test server
 npm run test-ws
@@ -107,6 +108,22 @@ npm run test-ws
 
 # Visit: https://chat.grabr.cc
 # Click "Connect" to test WSS tunneling!
+```
+
+**Method 2: Command Line**
+```bash
+# Test with our WebSocket client
+node test-websocket-client.js wss://yoursubdomain.grabr.cc/ws
+
+# ❌ DON'T use curl - it doesn't support WebSocket properly:
+# curl wss://... (This won't work!)
+```
+
+**Method 3: From Your Code**
+```javascript
+// Frontend code can directly connect
+const ws = new WebSocket('wss://yoursubdomain.grabr.cc/ws');
+ws.onopen = () => console.log('Connected via tunnel!');
 ```
 
 ## 🎯 That's It!

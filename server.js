@@ -42,7 +42,8 @@ class TunnelServer {
         localPort: client.localPort,
         localHost: client.localHost,
         connectedAt: client.connectedAt,
-        publicUrl: `http://[VM-IP]:${this.config.serverPort}/${id}/`
+        publicUrl: `http://grabr.cc:${this.config.serverPort}/${id}/`,
+        subdomainUrl: `http://${id}.tunnel.grabr.cc/`
       }));
 
       res.json({
@@ -92,12 +93,12 @@ class TunnelServer {
         this.tunnelClients.delete(tunnelId);
       });
 
-      // Send connection confirmation
+      // Send connection confirmation  
       ws.send(JSON.stringify({
         type: 'connected',
         tunnelId,
-        publicUrl: `http://[VM-IP]:${this.config.serverPort}/${tunnelId}/`,
-        subdomainUrl: `http://${tunnelId}.[VM-IP]:${this.config.serverPort}/`
+        publicUrl: `http://grabr.cc:${this.config.serverPort}/${tunnelId}/`,
+        subdomainUrl: `http://${tunnelId}.tunnel.grabr.cc/`
       }));
     });
   }
@@ -161,7 +162,7 @@ class TunnelServer {
       const host = req.get('host') || '';
       const subdomain = host.split('.')[0];
       
-      console.log(`🔍 Debug: Host=${host}, Subdomain=${subdomain}`);
+
       
       // Check if this is a subdomain request (tunnel-based)
       const tunnelClient = this.tunnelClients.get(subdomain);

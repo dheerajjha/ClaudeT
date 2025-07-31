@@ -22,6 +22,7 @@ export TUNNEL_PORT=${TUNNEL_PORT:-8081}
 echo "📋 Configuration:"
 echo "   Server Port: $SERVER_PORT"
 echo "   Tunnel Port: $TUNNEL_PORT"
+echo "   Domain: grabr.cc"
 echo ""
 
 # Start the server

@@ -1,16 +1,11 @@
 {
   "name": "mini-tunnel",
   "version": "1.0.0",
-  "description": "A simple tunneling solution similar to ngrok or cloudflared",
-  "main": "index.js",
+  "description": "Your own ngrok alternative - expose local services with custom domain and HTTPS",
+  "main": "server.js",
   "scripts": {
-    "start": "node client.js",
     "server": "node server.js",
-    "client": "node client.js",
-    "dev:server": "nodemon server.js",
-    "dev:client": "nodemon client.js",
-    "install:server": "npm install",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "client": "node client.js"
   },
   "keywords": [
     "tunnel",
@@ -28,9 +23,7 @@
     "http-proxy-middleware": "^2.0.6",
     "cors": "^2.8.5"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
-  },
+
   "engines": {
     "node": ">=14.0.0"
   }

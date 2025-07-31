@@ -170,7 +170,7 @@ class TCPTunnelServer {
     client.tcpConnections.set(connectionId, { type: 'http', res, buffer: Buffer.alloc(0) });
 
     // Build HTTP request string
-    const httpRequest = this.buildHTTPRequest(req);
+    const httpRequest = this.buildHTTPRequest(req, client.localPort);
     
     // Send TCP connection request to client
     client.ws.send(JSON.stringify({
@@ -192,7 +192,7 @@ class TCPTunnelServer {
     }, 30000);
   }
 
-  buildHTTPRequest(req) {
+  buildHTTPRequest(req, localPort) {
     const lines = [];
     lines.push(`${req.method} ${req.url} HTTP/1.1`);
     
@@ -202,7 +202,7 @@ class TCPTunnelServer {
         lines.push(`${key}: ${value}`);
       }
     }
-    lines.push(`Host: localhost:${req.socket.localPort || 80}`);
+    lines.push(`Host: localhost:${localPort}`);
     lines.push('Connection: close');
     lines.push('');
     
@@ -240,9 +240,23 @@ class TCPTunnelServer {
           for (const [key, value] of Object.entries(response.headers)) {
             res.set(key, value);
           }
-          res.send(response.body);
+          
+          // Handle different content types properly
+          const contentType = response.headers['content-type'] || response.headers['Content-Type'] || '';
+          if (contentType.includes('application/json')) {
+            res.json(response.body);
+          } else if (contentType.includes('text/')) {
+            res.send(response.body);
+          } else {
+            res.send(response.body);
+          }
         }
         client.tcpConnections.delete(data.connectionId);
+      }
+    } else if (connection.type === 'websocket') {
+      // Forward raw WebSocket data
+      if (connection.socket && !connection.socket.destroyed) {
+        connection.socket.write(buffer);
       }
     }
   }
@@ -340,7 +354,7 @@ class TCPTunnelServer {
     client.tcpConnections.set(connectionId, { type: 'websocket', socket });
     
     // Build WebSocket upgrade request
-    const upgradeRequest = this.buildWebSocketUpgradeRequest(request);
+    const upgradeRequest = this.buildWebSocketUpgradeRequest(request, client.localPort);
     
     // Send to client
     client.ws.send(JSON.stringify({
@@ -352,13 +366,16 @@ class TCPTunnelServer {
     }));
   }
 
-  buildWebSocketUpgradeRequest(request) {
+  buildWebSocketUpgradeRequest(request, localPort) {
     const lines = [];
     lines.push(`GET ${request.url} HTTP/1.1`);
     
     for (const [key, value] of Object.entries(request.headers)) {
-      lines.push(`${key}: ${value}`);
+      if (key.toLowerCase() !== 'host') {
+        lines.push(`${key}: ${value}`);
+      }
     }
+    lines.push(`Host: localhost:${localPort}`);
     lines.push('');
     
     return Buffer.from(lines.join('\r\n'));

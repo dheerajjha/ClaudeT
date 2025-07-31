@@ -136,30 +136,15 @@ class TunnelClient {
     return new Promise((resolve, reject) => {
       const url = new URL(request.url, `http://${this.config.localHost}:${this.config.localPort}`);
       
-      // Clean up headers - remove problematic ones
-      const cleanHeaders = { ...request.headers };
+      // Use a whitelist approach - only keep essential headers
+      const allowedHeaders = ['accept', 'accept-encoding', 'accept-language', 'user-agent', 'content-type', 'content-length', 'cache-control'];
+      const cleanHeaders = {};
       
-      // Remove standard problematic headers
-      delete cleanHeaders['host'];
-      delete cleanHeaders['connection'];
-      delete cleanHeaders['upgrade'];
-      delete cleanHeaders['sec-websocket-key'];
-      delete cleanHeaders['sec-websocket-version'];
-      delete cleanHeaders['sec-websocket-extensions'];
-      
-      // Remove Cloudflare headers
-      delete cleanHeaders['cf-ray'];
-      delete cleanHeaders['cf-visitor'];
-      delete cleanHeaders['cf-connecting-ip'];
-      delete cleanHeaders['cf-ipcountry'];
-      delete cleanHeaders['x-forwarded-for'];
-      delete cleanHeaders['x-forwarded-proto'];
-      delete cleanHeaders['x-real-ip'];
-      
-      // Remove other proxy headers that might cause issues
-      delete cleanHeaders['x-forwarded-host'];
-      delete cleanHeaders['x-forwarded-port'];
-      delete cleanHeaders['forwarded'];
+      for (const [key, value] of Object.entries(request.headers)) {
+        if (allowedHeaders.includes(key.toLowerCase())) {
+          cleanHeaders[key] = value;
+        }
+      }
       
       const options = {
         hostname: this.config.localHost,
@@ -207,14 +192,16 @@ class TunnelClient {
         });
       });
 
-      req.on('error', (error) => {
-        reject(new Error(`Local server error: ${error.message}`));
-      });
+             req.on('error', (error) => {
+         console.error(`🔥 Local server connection error:`, error.message);
+         reject(new Error(`Local server error: ${error.message}`));
+       });
 
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Local server timeout'));
-      });
+       req.on('timeout', () => {
+         console.error(`⏰ Local server request timeout`);
+         req.destroy();
+         reject(new Error('Local server timeout'));
+       });
 
       // Send request body if present
       if (request.body) {
@@ -231,7 +218,9 @@ class TunnelClient {
 
   sendMessage(message) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      const messageStr = JSON.stringify(message);
+      console.log(`📡 Sending message: type=${message.type}, size=${messageStr.length} bytes`);
+      this.ws.send(messageStr);
     } else {
       console.warn('⚠️ Cannot send message: WebSocket not connected');
     }

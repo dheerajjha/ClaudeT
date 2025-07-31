@@ -88,6 +88,7 @@ class TunnelServer {
       ws.on('message', (data) => {
         try {
           const message = JSON.parse(data);
+          console.log(`📡 Received message: type=${message.type}, from=${tunnelId}, size=${data.length} bytes`);
           this.handleTunnelMessage(tunnelId, message);
         } catch (error) {
           console.error(`❌ Invalid message from ${tunnelId}:`, error.message);

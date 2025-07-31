@@ -40,7 +40,12 @@ class TunnelServer {
         id,
         connected: client.ws.readyState === WebSocket.OPEN,
         localPort: client.localPort,
-        connectedAt: client.connectedAt
+        localHost: client.localHost,
+        subdomain: client.subdomain,
+        customDomain: client.customDomain,
+        routingRules: client.routingRules,
+        connectedAt: client.connectedAt,
+        publicUrls: this.generatePublicUrls(id, client)
       }));
 
       res.json({
@@ -48,7 +53,10 @@ class TunnelServer {
           serverPort: this.config.serverPort,
           tunnelPort: this.config.tunnelPort
         },
-        tunnels
+        tunnels,
+        routingInfo: {
+          message: 'Requests are routed based on: 1) Subdomain match, 2) Custom domain, 3) Path prefixes, 4) Priority/recency'
+        }
       });
     });
   }
@@ -103,7 +111,16 @@ class TunnelServer {
     switch (data.type) {
       case 'config':
         client.localPort = data.localPort;
-        console.log(`📋 Tunnel ${tunnelId} configured for local port ${data.localPort}`);
+        client.localHost = data.localHost || 'localhost';
+        // Set routing preferences
+        client.routingRules = data.routingRules || { priority: 1 };
+        client.subdomain = data.subdomain || null;
+        client.customDomain = data.customDomain || null;
+        
+        console.log(`📋 Tunnel ${tunnelId} configured:`);
+        console.log(`   Local: ${client.localHost}:${client.localPort}`);
+        if (client.subdomain) console.log(`   Subdomain: ${client.subdomain}`);
+        if (client.customDomain) console.log(`   Custom Domain: ${client.customDomain}`);
         break;
       
       case 'response':
@@ -149,7 +166,7 @@ class TunnelServer {
   }
 
   setupProxyRoutes() {
-    // Handle requests to tunneled services
+    // Handle requests to tunneled services (with tunnel ID)
     this.app.use('/:tunnelId/*', (req, res, next) => {
       const tunnelId = req.params.tunnelId;
       const client = this.tunnelClients.get(tunnelId);
@@ -164,6 +181,19 @@ class TunnelServer {
       this.forwardRequestToTunnel(tunnelId, req, res);
     });
 
+    // Handle direct tunnel access (when someone visits just the tunnel ID)
+    this.app.use('/:tunnelId', (req, res, next) => {
+      const tunnelId = req.params.tunnelId;
+      const client = this.tunnelClients.get(tunnelId);
+
+      if (client && client.ws.readyState === WebSocket.OPEN) {
+        // Redirect to include trailing slash for proper relative path handling
+        res.redirect(`/${tunnelId}/`);
+      } else {
+        next();
+      }
+    });
+
     // Root path handler
     this.app.get('/', (req, res) => {
       res.json({
@@ -176,9 +206,37 @@ class TunnelServer {
         }
       });
     });
+
+    // Catch-all handler for ANY request that doesn't match above patterns
+    // This will intelligently route to the correct tunnel
+    this.app.use('*', (req, res) => {
+      // Skip the specific server endpoints
+      if (req.path === '/health' || req.path === '/dashboard' || req.path === '/') {
+        return res.status(404).json({ error: 'Endpoint not found' });
+      }
+
+      const tunnelId = this.findBestTunnelForRequest(req);
+      
+      if (tunnelId) {
+        const client = this.tunnelClients.get(tunnelId);
+        if (client && client.ws.readyState === WebSocket.OPEN) {
+          console.log(`🔄 Routing ${req.method} ${req.path} to tunnel ${tunnelId}`);
+          this.forwardRequestToTunnel(tunnelId, req, res, true);
+        } else {
+          res.status(404).json({ error: `Tunnel ${tunnelId} not available` });
+        }
+      } else {
+        res.status(404).json({ 
+          error: 'No suitable tunnel found',
+          path: req.path,
+          method: req.method,
+          availableTunnels: Array.from(this.tunnelClients.keys())
+        });
+      }
+    });
   }
 
-  forwardRequestToTunnel(tunnelId, req, res) {
+  forwardRequestToTunnel(tunnelId, req, res, isAssetRequest = false) {
     const client = this.tunnelClients.get(tunnelId);
     const requestId = this.generateRequestId();
 
@@ -186,11 +244,20 @@ class TunnelServer {
     client.requestQueue.push({ id: requestId, req, res });
 
     // Forward request to client
+    let targetUrl;
+    if (isAssetRequest) {
+      // For asset requests, keep the original URL
+      targetUrl = req.url;
+    } else {
+      // For regular requests, strip the tunnel ID
+      targetUrl = req.url.replace(`/${tunnelId}`, '') || '/';
+    }
+
     const requestData = {
       type: 'request',
       requestId,
       method: req.method,
-      url: req.url.replace(`/${tunnelId}`, '') || '/',
+      url: targetUrl,
       headers: req.headers,
       body: req.body
     };
@@ -215,6 +282,78 @@ class TunnelServer {
 
   generateRequestId() {
     return Math.random().toString(36).substr(2, 12);
+  }
+
+  generatePublicUrls(tunnelId, client) {
+    const baseUrl = `http://[VM-IP]:${this.config.serverPort}`;
+    const urls = [`${baseUrl}/${tunnelId}/`];
+    
+    if (client.subdomain) {
+      urls.push(`http://${client.subdomain}.[VM-IP]:${this.config.serverPort}/`);
+    }
+    
+    if (client.customDomain) {
+      urls.push(`http://${client.customDomain}/`);
+    }
+    
+    // For path-based routing, show examples
+    if (client.routingRules?.pathPrefixes) {
+      client.routingRules.pathPrefixes.forEach(prefix => {
+        urls.push(`${baseUrl}${prefix}`);
+      });
+    }
+    
+    return urls;
+  }
+
+  findBestTunnelForRequest(req) {
+    const activeTunnels = Array.from(this.tunnelClients.entries())
+      .filter(([id, client]) => client.ws.readyState === WebSocket.OPEN)
+      .map(([id, client]) => ({ id, client }));
+
+    if (activeTunnels.length === 0) return null;
+
+    // 1. Check for exact subdomain match (if using subdomains)
+    const host = req.get('host') || '';
+    const subdomain = host.split('.')[0];
+    
+    for (const { id, client } of activeTunnels) {
+      if (client.subdomain && client.subdomain === subdomain) {
+        return id;
+      }
+    }
+
+    // 2. Check for custom domain match
+    for (const { id, client } of activeTunnels) {
+      if (client.customDomain && host.includes(client.customDomain)) {
+        return id;
+      }
+    }
+
+    // 3. Check for path-based routing rules
+    for (const { id, client } of activeTunnels) {
+      if (client.routingRules && client.routingRules.pathPrefixes) {
+        for (const prefix of client.routingRules.pathPrefixes) {
+          if (req.path.startsWith(prefix)) {
+            return id;
+          }
+        }
+      }
+    }
+
+    // 4. Use default tunnel (highest priority, or most recent if no priority set)
+    const defaultTunnel = activeTunnels
+      .sort((a, b) => {
+        const aPriority = a.client.routingRules?.priority || 1;
+        const bPriority = b.client.routingRules?.priority || 1;
+        if (aPriority !== bPriority) {
+          return bPriority - aPriority; // Higher priority first
+        }
+        // If same priority, use most recent
+        return new Date(b.client.connectedAt) - new Date(a.client.connectedAt);
+      })[0];
+
+    return defaultTunnel ? defaultTunnel.id : null;
   }
 
   start() {

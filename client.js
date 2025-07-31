@@ -9,6 +9,9 @@ class TunnelClient {
       serverPort: config.serverPort || 8081,
       localPort: config.localPort || 3000,
       localHost: config.localHost || 'localhost',
+      subdomain: config.subdomain || null,
+      customDomain: config.customDomain || null,
+      routingRules: config.routingRules || { priority: 1 },
       ...config
     };
     
@@ -35,7 +38,10 @@ class TunnelClient {
       this.sendMessage({
         type: 'config',
         localPort: this.config.localPort,
-        localHost: this.config.localHost
+        localHost: this.config.localHost,
+        subdomain: this.config.subdomain,
+        customDomain: this.config.customDomain,
+        routingRules: this.config.routingRules
       });
     });
 
@@ -192,18 +198,39 @@ async function startClient() {
   const serverHost = await ask('Enter your VM IP address: ') || 'your-vm-ip';
   const serverPort = await ask('Enter tunnel server port (default 8081): ') || '8081';
   const localPort = await ask('Enter local port to tunnel (default 3000): ') || '3000';
+  
+  console.log('\n🔀 Optional Routing Configuration:');
+  const subdomain = await ask('Subdomain (optional, e.g., "api" for api.yourdomain): ');
+  const customDomain = await ask('Custom domain (optional, e.g., "myapp.com"): ');
+  const pathPrefixes = await ask('Path prefixes (optional, comma-separated, e.g., "/api,/v1"): ');
+  const priority = await ask('Priority (1-10, higher = preferred, default 1): ') || '1';
 
   rl.close();
+
+  const routingRules = {
+    priority: parseInt(priority)
+  };
+  
+  if (pathPrefixes.trim()) {
+    routingRules.pathPrefixes = pathPrefixes.split(',').map(p => p.trim());
+  }
 
   const config = {
     serverHost,
     serverPort: parseInt(serverPort),
-    localPort: parseInt(localPort)
+    localPort: parseInt(localPort),
+    subdomain: subdomain.trim() || null,
+    customDomain: customDomain.trim() || null,
+    routingRules
   };
 
   console.log('\n📋 Configuration:');
   console.log(`   Server: ${config.serverHost}:${config.serverPort}`);
-  console.log(`   Local: localhost:${config.localPort}\n`);
+  console.log(`   Local: localhost:${config.localPort}`);
+  if (config.subdomain) console.log(`   Subdomain: ${config.subdomain}`);
+  if (config.customDomain) console.log(`   Custom Domain: ${config.customDomain}`);
+  if (config.routingRules.pathPrefixes) console.log(`   Path Prefixes: ${config.routingRules.pathPrefixes.join(', ')}`);
+  console.log(`   Priority: ${config.routingRules.priority}\n`);
 
   const client = new TunnelClient(config);
 

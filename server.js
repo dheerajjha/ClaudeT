@@ -3,7 +3,6 @@ const http = require('http');
 const WebSocket = require('ws');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
-const httpProxy = require('http-proxy');
 
 class TunnelServer {
   constructor(config = {}) {
@@ -443,28 +442,23 @@ class TunnelServer {
       // Mark connection as established
       connectionInfo.established = true;
 
-      // Create WebSocket on server side to handle frames properly
-      const ws = new WebSocket(null);
-      ws._socket = socket;
-      connectionInfo.ws = ws;
-
-      // Setup bidirectional WebSocket data forwarding
-      ws.on('message', (message) => {
+      // Setup raw socket data forwarding (simpler approach)
+      socket.on('data', (chunk) => {
         // Forward client WebSocket data to tunnel
         client.ws.send(JSON.stringify({
           type: 'websocket_data',
           upgradeId: data.upgradeId,
-          data: Buffer.from(message).toString('base64'),
+          data: chunk.toString('base64'),
           direction: 'to_local'
         }));
       });
 
-      ws.on('error', (error) => {
-        console.error(`❌ WebSocket error for ${data.upgradeId}:`, error.message);
+      socket.on('error', (error) => {
+        console.error(`❌ WebSocket socket error for ${data.upgradeId}:`, error.message);
         client.webSocketConnections.delete(data.upgradeId);
       });
 
-      ws.on('close', () => {
+      socket.on('close', () => {
         client.webSocketConnections.delete(data.upgradeId);
         // Notify client that WebSocket connection closed
         client.ws.send(JSON.stringify({
@@ -472,10 +466,6 @@ class TunnelServer {
           upgradeId: data.upgradeId
         }));
       });
-
-      // Handle the upgrade properly
-      ws._server = { emit: () => {} }; // Mock server
-      ws.setSocket(socket, Buffer.alloc(0), { maxPayload: 100 * 1024 * 1024 });
 
       console.log(`✅ WebSocket upgrade successful: ${data.upgradeId}`);
     } else {
@@ -492,12 +482,12 @@ class TunnelServer {
     if (!client || !client.webSocketConnections) return;
 
     const connectionInfo = client.webSocketConnections.get(data.upgradeId);
-    if (!connectionInfo || !connectionInfo.ws || connectionInfo.ws.readyState !== WebSocket.OPEN) return;
+    if (!connectionInfo || connectionInfo.socket.destroyed) return;
 
     if (data.direction === 'to_client') {
       // Forward data from local WebSocket to client
       const buffer = Buffer.from(data.data, 'base64');
-      connectionInfo.ws.send(buffer);
+      connectionInfo.socket.write(buffer);
     }
   }
 
@@ -506,12 +496,8 @@ class TunnelServer {
     if (!client || !client.webSocketConnections) return;
 
     const connectionInfo = client.webSocketConnections.get(data.upgradeId);
-    if (connectionInfo) {
-      if (connectionInfo.ws && connectionInfo.ws.readyState === WebSocket.OPEN) {
-        connectionInfo.ws.close();
-      } else if (connectionInfo.socket && !connectionInfo.socket.destroyed) {
-        connectionInfo.socket.destroy();
-      }
+    if (connectionInfo && connectionInfo.socket && !connectionInfo.socket.destroyed) {
+      connectionInfo.socket.destroy();
       client.webSocketConnections.delete(data.upgradeId);
       console.log(`🔌 WebSocket connection closed by client: ${data.upgradeId}`);
     }

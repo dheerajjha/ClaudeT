@@ -1,33 +1,27 @@
 {
-  "name": "mini-tunnel",
-  "version": "1.0.0",
-  "description": "Your own ngrok alternative - expose local services with custom domain and HTTPS",
-  "main": "server.js",
+  "name": "http-tunnel",
+  "version": "2.0.0",
+  "description": "Simple HTTP tunnel over WebSocket - ngrok alternative",
+  "main": "tunnel-server.js",
   "scripts": {
-    "server": "node server.js",
-    "client": "node client.js",
-    "tcp-server": "node tcp-tunnel-server.js",
-    "tcp-client": "node tcp-tunnel-client.js",
-    "quick-client": "node tcp-tunnel-client.js --quick",
-    "start-server": "./start-server.sh",
-    "start-client": "./start-client.sh"
+    "server": "node tunnel-server.js",
+    "client": "node tunnel-client.js",
+    "start": "node tunnel-server.js"
   },
   "keywords": [
     "tunnel",
-    "ngrok",
-    "cloudflared",
+    "http",
+    "websocket",
     "proxy",
-    "local-development"
+    "ngrok",
+    "cloudflared"
   ],
-  "author": "Your Name",
+  "author": "HTTP Tunnel",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.2",
-    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "http-proxy": "^1.18.1",
-    "http-proxy-middleware": "^2.0.6",
-    "ws": "^8.14.2"
+    "ws": "^8.14.2",
+    "http-proxy-middleware": "^2.0.6"
   },
   "engines": {
     "node": ">=14.0.0"

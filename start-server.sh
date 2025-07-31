@@ -50,9 +50,10 @@ echo ""
 
 # Start the server
 echo "🔥 Starting server..."
+echo "🔧 Environment: SERVER_PORT=$SERVER_PORT, TUNNEL_PORT=$TUNNEL_PORT"
 if [ "$SERVER_PORT" = "80" ]; then
     echo "⚠️  Port 80 requires sudo privileges"
-    sudo node server.js
+    sudo SERVER_PORT=$SERVER_PORT TUNNEL_PORT=$TUNNEL_PORT node server.js
 else
     node server.js
 fi 

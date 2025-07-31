@@ -7,8 +7,8 @@ const cors = require('cors');
 class TunnelServer {
   constructor(config = {}) {
     this.config = {
-      serverPort: config.serverPort || 80,
-      tunnelPort: config.tunnelPort || 8080,
+      serverPort: config.serverPort || 8080,
+      tunnelPort: config.tunnelPort || 8081,
       ...config
     };
     

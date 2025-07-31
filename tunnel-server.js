@@ -179,14 +179,6 @@ class TunnelServer {
         this.handleWebSocketFrame(message);
         break;
 
-      case 'websocket_message':
-        this.handleWebSocketMessage(message);
-        break;
-
-      case 'websocket_response':
-        this.handleWebSocketResponse(message);
-        break;
-
       default:
         console.warn(`⚠️ Unknown message type: ${message.type}`);
     }
@@ -404,49 +396,21 @@ class TunnelServer {
   }
 
   setupWebSocketProxy(browserSocket, upgradeId) {
-    // Check if this is a terminal WebSocket connection
-    const isTerminalWS = upgradeId.includes('terminal');
-    
-    console.log(`🔌 Setting up WebSocket proxy for ${upgradeId}${isTerminalWS ? ' (Terminal)' : ''}`);
+    console.log(`🔌 Setting up transparent WebSocket proxy for ${upgradeId}`);
     
     // Store WebSocket connection for bidirectional communication
     browserSocket.on('data', (data) => {
-      if (isTerminalWS) {
-        // For terminal WebSockets, parse the WebSocket frame to extract JSON message
-        try {
-          const jsonMessage = this.parseWebSocketFrame(data);
-          if (jsonMessage) {
-            console.log(`📨 Terminal message:`, jsonMessage);
-            // Forward the parsed JSON message to client
-            const tunnel = Array.from(this.tunnels.values())
-              .find(t => t.ws.readyState === 1);
-            
-            if (tunnel) {
-              tunnel.ws.send(JSON.stringify({
-                type: 'websocket_message',
-                upgradeId,
-                message: jsonMessage,
-                isTerminal: true
-              }));
-            }
-          }
-        } catch (error) {
-          console.error(`❌ Error parsing terminal WebSocket frame:`, error.message);
-        }
-      } else {
-        // For non-terminal WebSockets, forward raw binary data
-        const tunnel = Array.from(this.tunnels.values())
-          .find(t => t.ws.readyState === 1);
-        
-        if (tunnel) {
-          tunnel.ws.send(JSON.stringify({
-            type: 'websocket_frame',
-            upgradeId,
-            data: data.toString('base64'),
-            isBinary: true,
-            isTerminal: false
-          }));
-        }
+      // Forward ALL WebSocket frames from browser to client (completely agnostic)
+      const tunnel = Array.from(this.tunnels.values())
+        .find(t => t.ws.readyState === 1);
+      
+      if (tunnel) {
+        tunnel.ws.send(JSON.stringify({
+          type: 'websocket_frame',
+          upgradeId,
+          data: data.toString('base64'),
+          direction: 'to_local'
+        }));
       }
     });
 
@@ -470,168 +434,17 @@ class TunnelServer {
 
     // Store reference for frames from client
     this.pendingRequests.set(`ws_${upgradeId}`, { 
-      socket: browserSocket, 
-      isTerminal: isTerminalWS 
+      socket: browserSocket
     });
-  }
-
-  parseWebSocketFrame(buffer) {
-    if (buffer.length < 2) return null;
-    
-    const firstByte = buffer[0];
-    const secondByte = buffer[1];
-    
-    const fin = (firstByte & 0x80) === 0x80;
-    const opcode = firstByte & 0x0f;
-    const masked = (secondByte & 0x80) === 0x80;
-    let payloadLength = secondByte & 0x7f;
-    
-    if (!fin || opcode !== 1) return null; // Only handle complete text frames
-    
-    let payloadStart = 2;
-    
-    // Handle extended payload length
-    if (payloadLength === 126) {
-      if (buffer.length < 4) return null;
-      payloadLength = buffer.readUInt16BE(2);
-      payloadStart = 4;
-    } else if (payloadLength === 127) {
-      if (buffer.length < 10) return null;
-      payloadLength = buffer.readUInt32BE(6); // Assuming payload < 4GB
-      payloadStart = 10;
-    }
-    
-    // Handle masking key
-    if (masked) {
-      if (buffer.length < payloadStart + 4) return null;
-      const maskingKey = buffer.slice(payloadStart, payloadStart + 4);
-      payloadStart += 4;
-      
-      if (buffer.length < payloadStart + payloadLength) return null;
-      
-      const payload = buffer.slice(payloadStart, payloadStart + payloadLength);
-      
-      // Unmask the payload
-      for (let i = 0; i < payload.length; i++) {
-        payload[i] ^= maskingKey[i % 4];
-      }
-      
-      try {
-        return JSON.parse(payload.toString('utf8'));
-      } catch (e) {
-        return null;
-      }
-    } else {
-      if (buffer.length < payloadStart + payloadLength) return null;
-      const payload = buffer.slice(payloadStart, payloadStart + payloadLength);
-      
-      try {
-        return JSON.parse(payload.toString('utf8'));
-      } catch (e) {
-        return null;
-      }
-    }
   }
 
   handleWebSocketFrame(message) {
     const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
     if (pending && pending.socket) {
-      // Forward frame from client to browser
+      // Forward frame from client to browser (completely agnostic)
       const data = Buffer.from(message.data, 'base64');
-      
-      if (pending.isTerminal && message.fromLocal) {
-        // For terminal WebSockets, wrap binary data in JSON format that Claude expects
-        try {
-          const jsonMessage = JSON.stringify({
-            type: 'data',
-            content: data.toString('utf8') // Terminal data is typically UTF-8 text
-          });
-          
-          // Create proper WebSocket frame for JSON message
-          const frameBuffer = this.createWebSocketFrame(jsonMessage);
-          pending.socket.write(frameBuffer);
-        } catch (error) {
-          console.error(`❌ Error creating terminal JSON frame:`, error);
-          // Fallback to raw data
-          pending.socket.write(data);
-        }
-      } else {
-        // For non-terminal WebSockets, send raw data
-        pending.socket.write(data);
-      }
+      pending.socket.write(data);
     }
-  }
-
-  handleWebSocketMessage(message) {
-    const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
-    if (pending && pending.socket && message.isTerminal) {
-      // This is a parsed JSON message from the browser terminal
-      // Forward it to the client to send to local server
-      console.log(`📤 Forwarding terminal message to client:`, message.message);
-      
-      const tunnel = Array.from(this.tunnels.values())
-        .find(t => t.ws.readyState === 1);
-      
-      if (tunnel) {
-        tunnel.ws.send(JSON.stringify({
-          type: 'websocket_json_message',
-          upgradeId: message.upgradeId,
-          jsonMessage: message.message
-        }));
-      }
-    }
-  }
-
-  handleWebSocketResponse(message) {
-    const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
-    if (pending && pending.socket && message.isTerminal) {
-      // This is a response from the local terminal WebSocket
-      // Send it back to the browser as a properly formatted WebSocket frame
-      console.log(`📤 Sending terminal response to browser:`, message.jsonResponse || message.textResponse);
-      
-      try {
-        let responseText;
-        if (message.jsonResponse) {
-          responseText = JSON.stringify(message.jsonResponse);
-        } else {
-          responseText = message.textResponse || '';
-        }
-        
-        // Create proper WebSocket frame for the response
-        const frameBuffer = this.createWebSocketFrame(responseText);
-        pending.socket.write(frameBuffer);
-      } catch (error) {
-        console.error(`❌ Error creating terminal response frame:`, error);
-      }
-    }
-  }
-
-  createWebSocketFrame(text) {
-    const payload = Buffer.from(text, 'utf8');
-    const payloadLength = payload.length;
-    
-    let frame;
-    if (payloadLength < 126) {
-      frame = Buffer.allocUnsafe(2 + payloadLength);
-      frame[0] = 0x81; // FIN=1, opcode=1 (text frame)
-      frame[1] = payloadLength;
-      payload.copy(frame, 2);
-    } else if (payloadLength < 65536) {
-      frame = Buffer.allocUnsafe(4 + payloadLength);
-      frame[0] = 0x81;
-      frame[1] = 126;
-      frame.writeUInt16BE(payloadLength, 2);
-      payload.copy(frame, 4);
-    } else {
-      frame = Buffer.allocUnsafe(10 + payloadLength);
-      frame[0] = 0x81;
-      frame[1] = 127;
-      frame.writeUInt32BE(0, 2);
-      frame.writeUInt32BE(payloadLength, 6);
-      payload.copy(frame, 10);
-    }
-    
-    return frame;
   }
 
   generateTunnelId() {

@@ -136,6 +136,16 @@ class TunnelServer {
         this.forwardResponse(tunnelId, data);
         break;
       
+      case 'websocket_upgrade_response':
+        // Handle WebSocket upgrade response from local server
+        this.handleWebSocketUpgradeResponse(tunnelId, data);
+        break;
+      
+      case 'websocket_data':
+        // Handle WebSocket data from local server
+        this.forwardWebSocketData(tunnelId, data);
+        break;
+      
       default:
         console.log(`Unknown message type: ${data.type}`);
     }
@@ -317,7 +327,144 @@ class TunnelServer {
     return Math.random().toString(36).substr(2, 12);
   }
 
+  handleWebSocketUpgrade(request, socket, head) {
+    try {
+      const host = request.headers.host || '';
+      const subdomain = host.split('.')[0];
+      
+      console.log(`🔄 WebSocket upgrade request: ${host}${request.url} → checking tunnel ${subdomain}`);
+      
+      // Check if this is a subdomain request (tunnel-based)
+      const tunnelClient = this.tunnelClients.get(subdomain);
+      if (tunnelClient && tunnelClient.ws.readyState === WebSocket.OPEN) {
+        console.log(`🌐 WSS routing: ${host}${request.url} → tunnel ${subdomain}`);
+        this.forwardWebSocketUpgrade(subdomain, request, socket, head);
+        return;
+      }
+      
+      // Check if there's any active tunnel for catch-all
+      const activeTunnels = Array.from(this.tunnelClients.entries())
+        .filter(([id, client]) => client.ws.readyState === WebSocket.OPEN);
+      
+      if (activeTunnels.length > 0) {
+        const [tunnelId] = activeTunnels[0];
+        console.log(`🔄 WSS Catch-all: ${request.url} → tunnel ${tunnelId}`);
+        this.forwardWebSocketUpgrade(tunnelId, request, socket, head);
+        return;
+      }
+      
+      // No active tunnels - close connection
+      console.log(`❌ No tunnel found for WebSocket upgrade: ${host}${request.url}`);
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+      socket.destroy();
+      
+    } catch (error) {
+      console.error('WebSocket upgrade error:', error);
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+      socket.destroy();
+    }
+  }
 
+  forwardWebSocketUpgrade(tunnelId, request, socket, head) {
+    const client = this.tunnelClients.get(tunnelId);
+    const upgradeId = this.generateRequestId();
+
+    // Store the socket for the WebSocket connection
+    if (!client.webSocketConnections) {
+      client.webSocketConnections = new Map();
+    }
+    client.webSocketConnections.set(upgradeId, socket);
+
+    // Send WebSocket upgrade request to client
+    const upgradeData = {
+      type: 'websocket_upgrade',
+      upgradeId,
+      url: request.url,
+      headers: request.headers,
+      protocol: request.headers['sec-websocket-protocol'],
+      key: request.headers['sec-websocket-key']
+    };
+
+    client.ws.send(JSON.stringify(upgradeData));
+
+    // Set timeout for upgrade
+    setTimeout(() => {
+      if (client.webSocketConnections && client.webSocketConnections.has(upgradeId)) {
+        client.webSocketConnections.delete(upgradeId);
+        if (!socket.destroyed) {
+          socket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
+          socket.destroy();
+        }
+      }
+    }, 10000); // 10 second timeout for WebSocket upgrade
+  }
+
+  handleWebSocketUpgradeResponse(tunnelId, data) {
+    const client = this.tunnelClients.get(tunnelId);
+    if (!client || !client.webSocketConnections) return;
+
+    const socket = client.webSocketConnections.get(data.upgradeId);
+    if (!socket || socket.destroyed) return;
+
+    if (data.success) {
+      // Send successful upgrade response
+      const responseLines = [
+        'HTTP/1.1 101 Switching Protocols',
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        `Sec-WebSocket-Accept: ${data.acceptKey}`,
+      ];
+
+      if (data.protocol) {
+        responseLines.push(`Sec-WebSocket-Protocol: ${data.protocol}`);
+      }
+
+      responseLines.push('', ''); // Empty line to end headers
+      socket.write(responseLines.join('\r\n'));
+
+      // Setup bidirectional WebSocket data forwarding
+      socket.on('data', (chunk) => {
+        // Forward client WebSocket data to tunnel
+        client.ws.send(JSON.stringify({
+          type: 'websocket_data',
+          upgradeId: data.upgradeId,
+          data: chunk.toString('base64'),
+          direction: 'to_local'
+        }));
+      });
+
+      socket.on('close', () => {
+        client.webSocketConnections.delete(data.upgradeId);
+        // Notify client that WebSocket connection closed
+        client.ws.send(JSON.stringify({
+          type: 'websocket_close',
+          upgradeId: data.upgradeId
+        }));
+      });
+
+      console.log(`✅ WebSocket upgrade successful: ${data.upgradeId}`);
+    } else {
+      // Send error response
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      socket.destroy();
+      client.webSocketConnections.delete(data.upgradeId);
+      console.log(`❌ WebSocket upgrade failed: ${data.upgradeId}`);
+    }
+  }
+
+  forwardWebSocketData(tunnelId, data) {
+    const client = this.tunnelClients.get(tunnelId);
+    if (!client || !client.webSocketConnections) return;
+
+    const socket = client.webSocketConnections.get(data.upgradeId);
+    if (!socket || socket.destroyed) return;
+
+    if (data.direction === 'to_client') {
+      // Forward data from local WebSocket to client
+      const buffer = Buffer.from(data.data, 'base64');
+      socket.write(buffer);
+    }
+  }
 
   start() {
     // Start WebSocket server on separate port (direct connection)
@@ -327,6 +474,11 @@ class TunnelServer {
     
     tunnelServer.listen(this.config.tunnelPort, () => {
       console.log(`🔌 WebSocket server running on port ${this.config.tunnelPort} (direct)`);
+    });
+    
+    // Add WebSocket upgrade handling for tunneled WSS connections
+    this.server.on('upgrade', (request, socket, head) => {
+      this.handleWebSocketUpgrade(request, socket, head);
     });
     
     // Start HTTP server (via Cloudflare)

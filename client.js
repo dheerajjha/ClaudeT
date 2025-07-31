@@ -18,6 +18,7 @@ class TunnelClient {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.isConnected = false;
+    this.webSocketConnections = new Map(); // Track active WebSocket connections
   }
 
   connect() {
@@ -88,6 +89,18 @@ class TunnelClient {
         this.handleIncomingRequest(data);
         break;
 
+      case 'websocket_upgrade':
+        this.handleWebSocketUpgrade(data);
+        break;
+
+      case 'websocket_data':
+        this.handleWebSocketData(data);
+        break;
+
+      case 'websocket_close':
+        this.handleWebSocketClose(data);
+        break;
+
       default:
         console.log(`Unknown message type: ${data.type}`);
     }
@@ -144,6 +157,103 @@ class TunnelClient {
     delete cleaned.connection;
     delete cleaned['content-length'];
     return cleaned;
+  }
+
+  async handleWebSocketUpgrade(upgradeData) {
+    try {
+      const WebSocket = require('ws');
+      const crypto = require('crypto');
+      
+      console.log(`🔄 WebSocket upgrade: ${upgradeData.url}`);
+      
+      // Create connection to local WebSocket server
+      const wsUrl = `ws://${this.config.localHost}:${this.config.localPort}${upgradeData.url}`;
+      const localWs = new WebSocket(wsUrl, upgradeData.protocol ? [upgradeData.protocol] : undefined);
+      
+      localWs.on('open', () => {
+        console.log(`✅ Connected to local WebSocket: ${wsUrl}`);
+        
+        // Generate WebSocket accept key
+        const acceptKey = crypto
+          .createHash('sha1')
+          .update(upgradeData.key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+          .digest('base64');
+        
+        // Store the connection
+        this.webSocketConnections.set(upgradeData.upgradeId, localWs);
+        
+        // Setup data forwarding
+        localWs.on('message', (data) => {
+          // Forward data from local WebSocket to server
+          this.sendMessage({
+            type: 'websocket_data',
+            upgradeId: upgradeData.upgradeId,
+            data: Buffer.from(data).toString('base64'),
+            direction: 'to_client'
+          });
+        });
+        
+        localWs.on('close', () => {
+          this.webSocketConnections.delete(upgradeData.upgradeId);
+          this.sendMessage({
+            type: 'websocket_close',
+            upgradeId: upgradeData.upgradeId
+          });
+        });
+        
+        // Send successful upgrade response
+        this.sendMessage({
+          type: 'websocket_upgrade_response',
+          upgradeId: upgradeData.upgradeId,
+          success: true,
+          acceptKey: acceptKey,
+          protocol: upgradeData.protocol
+        });
+      });
+      
+      localWs.on('error', (error) => {
+        console.error(`❌ WebSocket connection error: ${error.message}`);
+        
+        // Send failed upgrade response
+        this.sendMessage({
+          type: 'websocket_upgrade_response',
+          upgradeId: upgradeData.upgradeId,
+          success: false,
+          error: error.message
+        });
+      });
+      
+    } catch (error) {
+      console.error(`❌ WebSocket upgrade error:`, error.message);
+      
+      this.sendMessage({
+        type: 'websocket_upgrade_response',
+        upgradeId: upgradeData.upgradeId,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  handleWebSocketData(data) {
+    const WebSocket = require('ws');
+    const localWs = this.webSocketConnections.get(data.upgradeId);
+    if (!localWs || localWs.readyState !== WebSocket.OPEN) return;
+
+    if (data.direction === 'to_local') {
+      // Forward data from server to local WebSocket
+      const buffer = Buffer.from(data.data, 'base64');
+      localWs.send(buffer);
+    }
+  }
+
+  handleWebSocketClose(data) {
+    const localWs = this.webSocketConnections.get(data.upgradeId);
+    if (localWs) {
+      localWs.close();
+      this.webSocketConnections.delete(data.upgradeId);
+      console.log(`🔌 WebSocket connection closed: ${data.upgradeId}`);
+    }
   }
 
   sendMessage(data) {

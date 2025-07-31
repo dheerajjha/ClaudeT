@@ -6,6 +6,7 @@ Your own ngrok alternative - expose local services to the internet with custom d
 
 - 🌐 **Custom Subdomains**: `https://myapp.grabr.cc/` (your choice!)
 - 🚀 **Multi-Port Support**: Tunnel multiple services simultaneously
+- 🔌 **WebSocket Support**: Full WSS tunneling (`wss://myapp.grabr.cc/ws`)
 - 🔒 **HTTPS Everywhere**: Cloudflare SSL
 - 📊 **Dashboard**: `https://grabr.cc/dashboard`
 - 🔧 **Simple Setup**: Two commands to start
@@ -60,7 +61,7 @@ Enter preferred subdomain (optional): myapp
 → https://myapp.grabr.cc/
 ```
 
-### Multiple Services  
+### Multiple Services with WebSockets
 ```bash
 ./start-client.sh
 Tunnel multiple ports? (y/n, default n): y
@@ -68,14 +69,49 @@ Enter port (or press Enter to finish): 3000
 Enter subdomain for port 3000: api
 Enter port (or press Enter to finish): 3001  
 Enter subdomain for port 3001: app
+Enter port (or press Enter to finish): 8080
+Enter subdomain for port 8080: chat
 Enter port (or press Enter to finish): 
-→ https://api.grabr.cc/ (port 3000)
+→ https://api.grabr.cc/ + wss://api.grabr.cc/ws (port 3000)
 → https://app.grabr.cc/ (port 3001)
+→ https://chat.grabr.cc/ + wss://chat.grabr.cc/ (port 8080)
+```
+
+## 🔌 WebSocket Support
+
+Full WebSocket tunneling is supported! Your WSS connections work seamlessly:
+
+```javascript
+// Your local WebSocket server on localhost:3000
+const ws = new WebSocket('ws://localhost:3000/chat');
+
+// Accessible worldwide as:
+const ws = new WebSocket('wss://myapp.grabr.cc/chat');
+```
+
+**Perfect for:**
+- 💬 **Chat Applications**: Real-time messaging
+- 🎮 **Gaming**: Live multiplayer connections  
+- 📊 **Live Data**: Real-time dashboards
+- 🔄 **Live Updates**: Push notifications
+
+### 🧪 Test WebSocket Tunneling
+
+```bash
+# Start the WebSocket test server
+npm run test-ws
+
+# In another terminal, tunnel it
+./start-client.sh
+# Choose port 3000, subdomain "chat"
+
+# Visit: https://chat.grabr.cc
+# Click "Connect" to test WSS tunneling!
 ```
 
 ## 🎯 That's It!
 
-Your local services are now available worldwide with HTTPS. Share the URLs with anyone!
+Your local services are now available worldwide with HTTPS and WSS. Share the URLs with anyone!
 
 ---
 *Built with Express, WebSocket, and Cloudflare* 

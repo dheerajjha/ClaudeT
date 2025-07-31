@@ -138,12 +138,28 @@ class TunnelClient {
       
       // Clean up headers - remove problematic ones
       const cleanHeaders = { ...request.headers };
+      
+      // Remove standard problematic headers
       delete cleanHeaders['host'];
       delete cleanHeaders['connection'];
       delete cleanHeaders['upgrade'];
       delete cleanHeaders['sec-websocket-key'];
       delete cleanHeaders['sec-websocket-version'];
       delete cleanHeaders['sec-websocket-extensions'];
+      
+      // Remove Cloudflare headers
+      delete cleanHeaders['cf-ray'];
+      delete cleanHeaders['cf-visitor'];
+      delete cleanHeaders['cf-connecting-ip'];
+      delete cleanHeaders['cf-ipcountry'];
+      delete cleanHeaders['x-forwarded-for'];
+      delete cleanHeaders['x-forwarded-proto'];
+      delete cleanHeaders['x-real-ip'];
+      
+      // Remove other proxy headers that might cause issues
+      delete cleanHeaders['x-forwarded-host'];
+      delete cleanHeaders['x-forwarded-port'];
+      delete cleanHeaders['forwarded'];
       
       const options = {
         hostname: this.config.localHost,
@@ -156,6 +172,12 @@ class TunnelClient {
         },
         timeout: 25000
       };
+
+      console.log(`🔧 Request options:`, {
+        method: options.method,
+        path: options.path,
+        headers: Object.keys(options.headers)
+      });
 
       const req = http.request(options, (res) => {
         let body = '';

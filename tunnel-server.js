@@ -150,6 +150,7 @@ class TunnelServer {
         break;
 
       case 'response':
+        console.log(`📨 Received response message for request ${message.requestId}`);
         this.handleTunnelResponse(message);
         break;
 
@@ -250,6 +251,8 @@ class TunnelServer {
       } else {
         res.end();
       }
+      
+      console.log(`✅ Response sent: ${message.statusCode} (${message.requestId})`);
     } catch (error) {
       console.error(`❌ Error sending response:`, error.message);
       if (!res.headersSent) {

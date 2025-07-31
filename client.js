@@ -3,13 +3,12 @@ const axios = require('axios');
 const readline = require('readline');
 
 class TunnelClient {
-  constructor(config = {}) {
+  constructor(localPort = 3000) {
     this.config = {
-      serverHost: config.serverHost || 'your-vm-ip',
-      serverPort: config.serverPort || 8081,
-      localPort: config.localPort || 3000,
-      localHost: config.localHost || 'localhost',
-      ...config
+      serverHost: 'tunnel.grabr.cc',
+      serverPort: 80,
+      localPort: localPort,
+      localHost: 'localhost'
     };
     
     this.ws = null;
@@ -189,25 +188,17 @@ async function startClient() {
 
   const ask = (question) => new Promise(resolve => rl.question(question, resolve));
 
-  console.log('🚀 Mini Tunnel Client Setup\n');
-
-  const serverHost = await ask('Enter your VM IP address: ') || 'your-vm-ip';
-  const serverPort = await ask('Enter tunnel server port (default 8081): ') || '8081';
+  console.log('🚀 Mini Tunnel Client\n');
+  
   const localPort = await ask('Enter local port to tunnel (default 3000): ') || '3000';
-
+  
   rl.close();
 
-  const config = {
-    serverHost,
-    serverPort: parseInt(serverPort),
-    localPort: parseInt(localPort)
-  };
-
   console.log('\n📋 Configuration:');
-  console.log(`   Server: ${config.serverHost}:${config.serverPort}`);
-  console.log(`   Local: localhost:${config.localPort}\n`);
+  console.log(`   Server: tunnel.grabr.cc:80 (via Cloudflare)`);
+  console.log(`   Local: localhost:${localPort}\n`);
 
-  const client = new TunnelClient(config);
+  const client = new TunnelClient(parseInt(localPort));
 
   // Test local server first
   await client.testLocalServer();

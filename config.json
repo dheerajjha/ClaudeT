@@ -1,12 +1,11 @@
 {
   "server": {
     "serverPort": 80,
-    "tunnelPort": 8081,
     "host": "0.0.0.0"
   },
   "client": {
-    "serverHost": "your-vm-ip-here",
-    "serverPort": 8081,
+    "serverHost": "tunnel.grabr.cc",
+    "serverPort": 80,
     "localPort": 3000,
     "localHost": "localhost"
   },

@@ -7,8 +7,7 @@ const cors = require('cors');
 class TunnelServer {
   constructor(config = {}) {
     this.config = {
-      serverPort: config.serverPort || 8080,
-      tunnelPort: config.tunnelPort || 8081,
+      serverPort: config.serverPort || 80,
       ...config
     };
     
@@ -305,18 +304,14 @@ class TunnelServer {
 
 
   start() {
-    // Start WebSocket server on separate port
-    const tunnelServer = http.createServer();
-    this.wss = new WebSocket.Server({ server: tunnelServer });
+    // Start WebSocket server on the same HTTP server
+    this.wss = new WebSocket.Server({ server: this.server });
     this.setupWebSocketServer();
     
-    tunnelServer.listen(this.config.tunnelPort, () => {
-      console.log(`🔌 WebSocket server running on port ${this.config.tunnelPort}`);
-    });
-    
-    // Start HTTP server
+    // Start single HTTP server (handles both HTTP and WebSocket)
     this.server.listen(this.config.serverPort, () => {
       console.log(`🚀 Tunnel server running on port ${this.config.serverPort}`);
+      console.log(`🔌 WebSocket server running on port ${this.config.serverPort}`);
       console.log(`📊 Dashboard: http://localhost:${this.config.serverPort}/dashboard`);
       console.log(`🌐 Public Dashboard: https://tunnel.grabr.cc/dashboard`);
     });

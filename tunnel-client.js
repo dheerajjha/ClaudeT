@@ -163,8 +163,16 @@ class TunnelClient {
         path: options.path,
         headers: Object.keys(options.headers)
       });
+      
+      console.log(`🔧 Full headers:`, options.headers);
+      if (request.body) {
+        console.log(`🔧 Request body:`, typeof request.body, request.body.length || 'N/A');
+      }
 
       const req = http.request(options, (res) => {
+        console.log(`🔧 Local server response: ${res.statusCode} ${res.statusMessage}`);
+        console.log(`🔧 Response headers:`, Object.keys(res.headers));
+        
         let body = '';
         
         res.on('data', (chunk) => {
@@ -189,10 +197,10 @@ class TunnelClient {
             headers: res.headers,
             body: processedBody
           });
-        });
+                });
       });
-
-             req.on('error', (error) => {
+      
+      req.on('error', (error) => {
          console.error(`🔥 Local server connection error:`, error.message);
          reject(new Error(`Local server error: ${error.message}`));
        });

@@ -205,9 +205,13 @@ class TunnelServer {
       requestId,
       method: req.method,
       url: req.url,
-      headers: req.headers,
-      body: req.body
+      headers: req.headers
     };
+    
+    // Only include body if it's meaningful
+    if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+      requestData.body = req.body;
+    }
 
     console.log(`📤 Forwarding: ${req.method} ${req.url} → ${tunnel.id}`);
     tunnel.ws.send(JSON.stringify(requestData));

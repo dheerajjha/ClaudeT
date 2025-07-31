@@ -202,21 +202,30 @@ async function startClient() {
 
   console.log('🚀 Mini Tunnel Client\n');
   
-  const localPort = await ask('Enter local port to tunnel (default 3000): ') || '3000';
-  const suggestedSubdomain = await ask('Enter preferred subdomain (optional, e.g., "myapp"): ') || null;
+  const multiPort = await ask('Tunnel multiple ports? (y/n, default n): ');
   
-  rl.close();
+  if (multiPort.toLowerCase() === 'y') {
+    await startMultiPortClient(ask, rl);
+  } else {
+    const localPort = await ask('Enter local port to tunnel (default 3000): ') || '3000';
+    const suggestedSubdomain = await ask('Enter preferred subdomain (optional, e.g., "myapp"): ') || null;
+    
+    rl.close();
 
-  console.log('\n📋 Configuration:');
-  console.log(`   WebSocket: 20.193.143.179:8080 (direct)`);
-  console.log(`   Local: localhost:${localPort}`);
-  if (suggestedSubdomain) {
-    console.log(`   Requested: ${suggestedSubdomain}.grabr.cc`);
+    console.log('\n📋 Configuration:');
+    console.log(`   WebSocket: 20.193.143.179:8080 (direct)`);
+    console.log(`   Local: localhost:${localPort}`);
+    if (suggestedSubdomain) {
+      console.log(`   Requested: ${suggestedSubdomain}.grabr.cc`);
+    }
+    console.log('');
+
+    const client = new TunnelClient(parseInt(localPort), suggestedSubdomain);
+    await setupSingleClient(client);
   }
-  console.log('');
+}
 
-  const client = new TunnelClient(parseInt(localPort), suggestedSubdomain);
-
+async function setupSingleClient(client) {
   // Test local server first
   await client.testLocalServer();
 
@@ -229,6 +238,64 @@ async function startClient() {
 
   // Connect to tunnel server
   client.connect();
+}
+
+async function startMultiPortClient(ask, rl) {
+  const clients = [];
+  
+  console.log('\n🌟 Multi-Port Tunnel Setup');
+  console.log('Add multiple services (press Enter with empty port to finish):\n');
+  
+  while (true) {
+    const port = await ask('Enter port (or press Enter to finish): ');
+    if (!port) break;
+    
+    const subdomain = await ask(`Enter subdomain for port ${port} (optional): `) || null;
+    
+    // Validate port
+    const portNum = parseInt(port);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      console.log('❌ Invalid port number, skipping...');
+      continue;
+    }
+    
+    clients.push({
+      port: portNum,
+      subdomain: subdomain,
+      client: new TunnelClient(portNum, subdomain)
+    });
+    
+    console.log(`✅ Added: localhost:${port} → ${subdomain || 'random'}.grabr.cc`);
+  }
+  
+  rl.close();
+  
+  if (clients.length === 0) {
+    console.log('❌ No ports specified. Exiting...');
+    process.exit(0);
+  }
+  
+  console.log(`\n📋 Starting ${clients.length} tunnel(s):`);
+  
+  // Setup shutdown handler for all clients
+  process.on('SIGINT', () => {
+    console.log('\n👋 Shutting down all tunnels...');
+    clients.forEach(({ client }) => client.disconnect());
+    process.exit(0);
+  });
+  
+  // Test and connect all clients
+  for (const { port, subdomain, client } of clients) {
+    console.log(`\n🔌 Setting up tunnel for port ${port}...`);
+    await client.testLocalServer();
+    client.connect();
+    
+    // Small delay to avoid overwhelming the server
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  
+  console.log(`\n🎉 All ${clients.length} tunnels are starting up!`);
+  console.log('Check the logs above for your URLs 🌐');
 }
 
 // Start client if run directly

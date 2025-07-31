@@ -193,10 +193,13 @@ class TunnelClient {
 
       localWs.on('message', (data) => {
         // Forward message from local WebSocket to server
+        // Handle both text and binary frames
+        const isBuffer = Buffer.isBuffer(data);
         this.sendMessage({
           type: 'websocket_frame',
           upgradeId: message.upgradeId,
-          data: data.toString('base64')
+          data: data.toString('base64'),
+          isBinary: isBuffer
         });
       });
 
@@ -237,7 +240,13 @@ class TunnelClient {
     if (localWs && localWs.readyState === 1) {
       // Forward frame from server to local WebSocket
       const data = Buffer.from(message.data, 'base64');
-      localWs.send(data);
+      
+      // Send as binary or text based on original frame type
+      if (message.isBinary) {
+        localWs.send(data, { binary: true });
+      } else {
+        localWs.send(data.toString());
+      }
     }
   }
 

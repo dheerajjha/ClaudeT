@@ -96,11 +96,18 @@ class TunnelServer {
 
       ws.on('message', (data) => {
         try {
+          // Skip binary data or data that doesn't look like JSON
+          if (Buffer.isBuffer(data) && data[0] !== 0x7B) { // 0x7B is '{'
+            console.log(`📡 Received binary data (${data.length} bytes) - skipping JSON parse`);
+            return;
+          }
+          
           const message = JSON.parse(data);
           console.log(`📡 Received message: type=${message.type}, from=${tunnelId}, size=${data.length} bytes`);
           this.handleTunnelMessage(tunnelId, message);
         } catch (error) {
           console.error(`❌ Invalid message from ${tunnelId}:`, error.message);
+          console.log(`📋 Raw data preview: ${data.toString().substring(0, 50)}...`);
         }
       });
 
@@ -396,10 +403,12 @@ class TunnelServer {
         .find(t => t.ws.readyState === 1);
       
       if (tunnel) {
+        // Don't try to parse WebSocket frames as JSON - they're binary protocol data
         tunnel.ws.send(JSON.stringify({
           type: 'websocket_frame',
           upgradeId,
-          data: data.toString('base64')
+          data: data.toString('base64'),
+          isBinary: true
         }));
       }
     });

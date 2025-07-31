@@ -102,7 +102,6 @@ class TunnelClient {
 
   async handleTunnelRequest(request) {
     console.log(`📥 Received: ${request.method} ${request.url}`);
-    console.log(`🔍 Full request URL: "${request.url}"`);
     
     try {
       // Make request to local server

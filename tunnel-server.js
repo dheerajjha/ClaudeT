@@ -204,7 +204,7 @@ class TunnelServer {
       type: 'request',
       requestId,
       method: req.method,
-      url: req.url,
+      url: req.originalUrl,
       headers: req.headers
     };
     
@@ -213,8 +213,7 @@ class TunnelServer {
       requestData.body = req.body;
     }
 
-    console.log(`📤 Forwarding: ${req.method} ${req.url} → ${tunnel.id}`);
-    console.log(`🔍 Request details: originalUrl=${req.originalUrl}, path=${req.path}, url=${req.url}`);
+    console.log(`📤 Forwarding: ${req.method} ${req.originalUrl} → ${tunnel.id}`);
     tunnel.ws.send(JSON.stringify(requestData));
   }
 

@@ -43,7 +43,8 @@ class TunnelServer {
         localHost: client.localHost,
         connectedAt: client.connectedAt,
         publicUrl: `http://grabr.cc:${this.config.serverPort}/${id}/`,
-        subdomainUrl: `http://${id}.tunnel.grabr.cc/`
+        subdomainUrl: `https://${id}.tunnel.grabr.cc/`,
+        httpUrl: `http://${id}.tunnel.grabr.cc:8080/`
       }));
 
       res.json({
@@ -98,7 +99,8 @@ class TunnelServer {
         type: 'connected',
         tunnelId,
         publicUrl: `http://grabr.cc:${this.config.serverPort}/${tunnelId}/`,
-        subdomainUrl: `http://${tunnelId}.tunnel.grabr.cc/`
+        subdomainUrl: `https://${tunnelId}.tunnel.grabr.cc/`,
+        httpUrl: `http://${tunnelId}.tunnel.grabr.cc:8080/`
       }));
     });
   }

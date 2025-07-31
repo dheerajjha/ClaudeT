@@ -138,6 +138,18 @@ class TunnelServer {
             this.tunnels.set(requestedId, { ...tunnel, id: requestedId });
             console.log(`✨ Using custom subdomain: ${requestedId}`);
             
+            // UPDATE THE WebSocket MESSAGE HANDLER TO USE NEW ID
+            tunnel.ws.off('message'); // Remove old handler
+            tunnel.ws.on('message', (data) => {
+              try {
+                const message = JSON.parse(data);
+                console.log(`📡 Received message: type=${message.type}, from=${requestedId}, size=${data.length} bytes`);
+                this.handleTunnelMessage(requestedId, message); // Use new ID!
+              } catch (error) {
+                console.error(`❌ Invalid message from ${requestedId}:`, error.message);
+              }
+            });
+            
             tunnel.ws.send(JSON.stringify({
               type: 'subdomain_updated',
               tunnelId: requestedId,

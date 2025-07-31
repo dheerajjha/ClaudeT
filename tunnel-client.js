@@ -56,6 +56,16 @@ class TunnelClient {
       this.ws.on('close', () => {
         console.log('❌ Disconnected from tunnel server');
         this.isConnected = false;
+        
+        // Close all local WebSocket connections
+        if (this.localWebSockets) {
+          for (const [upgradeId, localWs] of this.localWebSockets.entries()) {
+            console.log(`🔌 Closing local WebSocket: ${upgradeId}`);
+            localWs.close();
+          }
+          this.localWebSockets.clear();
+        }
+        
         this.scheduleReconnect();
       });
 
@@ -95,6 +105,19 @@ class TunnelClient {
         this.handleTunnelRequest(message);
         break;
 
+      case 'websocket_upgrade':
+        console.log(`🔄 WebSocket upgrade request: ${message.url}`);
+        this.handleWebSocketUpgrade(message);
+        break;
+
+      case 'websocket_frame':
+        this.handleWebSocketFrame(message);
+        break;
+
+      case 'websocket_close':
+        this.handleWebSocketClose(message);
+        break;
+
       default:
         console.warn(`⚠️ Unknown message type: ${message.type}`);
     }
@@ -130,6 +153,122 @@ class TunnelClient {
         body: { error: 'Bad Gateway', message: error.message }
       });
     }
+  }
+
+  async handleWebSocketUpgrade(message) {
+    console.log(`🔌 Handling WebSocket upgrade: ${message.url}`);
+    
+    try {
+      const WebSocket = require('ws');
+      const crypto = require('crypto');
+      
+      // Create WebSocket connection to local server
+      const localUrl = `ws://${this.config.localHost}:${this.config.localPort}${message.url}`;
+      const localWs = new WebSocket(localUrl, {
+        headers: this.filterHeaders(message.headers)
+      });
+
+      // Store WebSocket connection
+      this.localWebSockets = this.localWebSockets || new Map();
+      this.localWebSockets.set(message.upgradeId, localWs);
+
+      localWs.on('open', () => {
+        console.log(`✅ Local WebSocket connected: ${localUrl}`);
+        
+        // Generate WebSocket accept key
+        const key = message.headers['sec-websocket-key'];
+        const acceptKey = crypto
+          .createHash('sha1')
+          .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+          .digest('base64');
+
+        // Send success response to server
+        this.sendMessage({
+          type: 'websocket_upgrade_response',
+          upgradeId: message.upgradeId,
+          success: true,
+          webSocketAccept: acceptKey
+        });
+      });
+
+      localWs.on('message', (data) => {
+        // Forward message from local WebSocket to server
+        this.sendMessage({
+          type: 'websocket_frame',
+          upgradeId: message.upgradeId,
+          data: data.toString('base64')
+        });
+      });
+
+      localWs.on('close', () => {
+        console.log(`🔌 Local WebSocket closed: ${message.upgradeId}`);
+        this.localWebSockets.delete(message.upgradeId);
+      });
+
+      localWs.on('error', (error) => {
+        console.error(`❌ Local WebSocket error: ${message.upgradeId}`, error);
+        
+        // Send failure response to server
+        this.sendMessage({
+          type: 'websocket_upgrade_response',
+          upgradeId: message.upgradeId,
+          success: false,
+          error: error.message
+        });
+        
+        this.localWebSockets.delete(message.upgradeId);
+      });
+
+    } catch (error) {
+      console.error(`❌ WebSocket upgrade failed: ${message.upgradeId}`, error);
+      
+      // Send failure response to server
+      this.sendMessage({
+        type: 'websocket_upgrade_response',
+        upgradeId: message.upgradeId,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  handleWebSocketFrame(message) {
+    const localWs = this.localWebSockets?.get(message.upgradeId);
+    if (localWs && localWs.readyState === 1) {
+      // Forward frame from server to local WebSocket
+      const data = Buffer.from(message.data, 'base64');
+      localWs.send(data);
+    }
+  }
+
+  handleWebSocketClose(message) {
+    const localWs = this.localWebSockets?.get(message.upgradeId);
+    if (localWs) {
+      console.log(`🔌 Closing local WebSocket: ${message.upgradeId}`);
+      localWs.close();
+      this.localWebSockets.delete(message.upgradeId);
+    }
+  }
+
+  filterHeaders(headers) {
+    // Filter headers for WebSocket upgrade
+    const filtered = {};
+    const allowedHeaders = [
+      'sec-websocket-key',
+      'sec-websocket-version', 
+      'sec-websocket-protocol',
+      'sec-websocket-extensions',
+      'origin',
+      'user-agent'
+    ];
+    
+    for (const [key, value] of Object.entries(headers)) {
+      if (allowedHeaders.includes(key.toLowerCase())) {
+        filtered[key] = value;
+      }
+    }
+    
+    return filtered;
   }
 
   makeLocalRequest(request) {

@@ -27,46 +27,55 @@ class TunnelServer {
     // Enable trust proxy for Cloudflare
     this.app.set('trust proxy', true);
     
-    // Parse request bodies
+    // Body parsing middleware
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-    this.app.use(express.raw({ type: '*/*', limit: '10mb' }));
-    
-    // Health check
+    this.app.use(express.raw({ limit: '10mb', type: '*/*' }));
+
+    // Health check endpoint
     this.app.get('/health', (req, res) => {
+      const activeTunnels = Array.from(this.tunnels.values())
+        .filter(t => t.ws.readyState === 1);
+      
       res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        activeTunnels: this.tunnels.size,
-        version: '1.0.0'
+        status: 'healthy',
+        activeTunnels: activeTunnels.length,
+        tunnels: activeTunnels.map(t => ({
+          id: t.id,
+          localPort: t.localPort,
+          connectedAt: t.connectedAt,
+          requestCount: t.requestCount || 0
+        }))
       });
     });
 
-    // Dashboard
+    // Dashboard endpoint
     this.app.get('/dashboard', (req, res) => {
-      const tunnels = Array.from(this.tunnels.entries()).map(([id, tunnel]) => ({
-        id,
-        connected: tunnel.ws.readyState === WebSocket.OPEN,
-        localPort: tunnel.localPort,
-        connectedAt: tunnel.connectedAt,
-        requestCount: tunnel.requestCount || 0,
-        url: `https://${id}.${this.config.domain}/`
-      }));
+      const activeTunnels = Array.from(this.tunnels.values())
+        .filter(t => t.ws.readyState === 1);
 
       res.json({
-        server: {
-          httpPort: this.config.httpPort,
-          wsPort: this.config.wsPort,
-          domain: this.config.domain
-        },
-        tunnels,
-        totalRequests: tunnels.reduce((sum, t) => sum + t.requestCount, 0)
+        server: 'HTTP Tunnel Server',
+        status: 'running',
+        activeTunnels: activeTunnels.length,
+        tunnels: activeTunnels.map(t => ({
+          id: t.id,
+          url: `https://${t.id}.${this.config.domain}/`,
+          localPort: t.localPort,
+          connectedAt: t.connectedAt,
+          requestCount: t.requestCount || 0
+        }))
       });
     });
 
-    // Main tunnel handler - catch all requests
+    // Catch-all route for tunnel requests
     this.app.use('*', (req, res) => {
       this.handleTunnelRequest(req, res);
+    });
+    
+    // Add WebSocket upgrade handling
+    this.httpServer.on('upgrade', (request, socket, head) => {
+      this.handleWebSocketUpgrade(request, socket, head);
     });
   }
 
@@ -103,7 +112,7 @@ class TunnelServer {
         for (const [requestId, pending] of this.pendingRequests.entries()) {
           if (requestId.startsWith(tunnelId)) {
             clearTimeout(pending.timeout);
-            if (!pending.res.headersSent) {
+            if (pending.res && !pending.res.headersSent) {
               pending.res.status(502).json({ error: 'Tunnel disconnected' });
             }
             this.pendingRequests.delete(requestId);
@@ -154,11 +163,20 @@ class TunnelServer {
         this.handleTunnelResponse(message);
         break;
 
+      case 'websocket_upgrade_response':
+        console.log(`🔌 Received WebSocket upgrade response for ${message.upgradeId}`);
+        this.handleTunnelResponse(message);
+        break;
+
+      case 'websocket_frame':
+        this.handleWebSocketFrame(message);
+        break;
+
       default:
         console.warn(`⚠️ Unknown message type: ${message.type}`);
     }
   }
-
+  
   handleTunnelRequest(req, res) {
     const host = req.get('host') || '';
     const subdomain = host.split('.')[0];
@@ -166,10 +184,10 @@ class TunnelServer {
     // Find tunnel by subdomain or fallback to any active tunnel
     let tunnel = this.tunnels.get(subdomain);
     
-    if (!tunnel || tunnel.ws.readyState !== WebSocket.OPEN) {
+    if (!tunnel || tunnel.ws.readyState !== 1) {
       // Fallback to first active tunnel
       const activeTunnels = Array.from(this.tunnels.values())
-        .filter(t => t.ws.readyState === WebSocket.OPEN);
+        .filter(t => t.ws.readyState === 1);
       
       if (activeTunnels.length === 0) {
         return res.status(404).json({ 
@@ -179,9 +197,9 @@ class TunnelServer {
       }
       
       tunnel = activeTunnels[0];
-      console.log(`🔄 Fallback routing: ${req.method} ${req.path} → tunnel ${tunnel.id}`);
+      console.log(`🔄 Fallback routing: ${req.method} ${req.originalUrl} → tunnel ${tunnel.id}`);
     } else {
-      console.log(`🌐 Subdomain routing: ${host}${req.path} → tunnel ${tunnel.id}`);
+      console.log(`🌐 Subdomain routing: ${host}${req.originalUrl} → tunnel ${tunnel.id}`);
     }
 
     tunnel.requestCount = (tunnel.requestCount || 0) + 1;
@@ -217,7 +235,78 @@ class TunnelServer {
     tunnel.ws.send(JSON.stringify(requestData));
   }
 
+  handleWebSocketUpgrade(request, socket, head) {
+    try {
+      const host = request.headers.host || '';
+      const subdomain = host.split('.')[0];
+      
+      console.log(`🔄 WebSocket upgrade: ${host}${request.url} → checking tunnel ${subdomain}`);
+      
+      // Find tunnel by subdomain or fallback to any active tunnel
+      let tunnel = this.tunnels.get(subdomain);
+      
+      if (!tunnel || tunnel.ws.readyState !== 1) {
+        // Fallback to first active tunnel
+        const activeTunnels = Array.from(this.tunnels.values())
+          .filter(t => t.ws.readyState === 1);
+        
+        if (activeTunnels.length === 0) {
+          console.log(`❌ No tunnel found for WebSocket upgrade: ${host}${request.url}`);
+          socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        tunnel = activeTunnels[0];
+        console.log(`🔄 WSS Fallback: ${request.url} → tunnel ${tunnel.id}`);
+      } else {
+        console.log(`🌐 WSS Subdomain: ${host}${request.url} → tunnel ${tunnel.id}`);
+      }
+
+      this.forwardWebSocketUpgrade(tunnel, request, socket, head);
+      
+    } catch (error) {
+      console.error('❌ WebSocket upgrade error:', error);
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+      socket.destroy();
+    }
+  }
+
+  forwardWebSocketUpgrade(tunnel, request, socket, head) {
+    const upgradeId = `${tunnel.id}_ws_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    
+    console.log(`🔌 Creating WebSocket bridge: ${upgradeId}`);
+    
+    // Store the socket for this WebSocket connection
+    this.pendingRequests.set(upgradeId, { socket, head });
+    
+    // Forward WebSocket upgrade request to client
+    const upgradeData = {
+      type: 'websocket_upgrade',
+      upgradeId,
+      method: request.method,
+      url: request.url,
+      headers: request.headers
+    };
+
+    tunnel.ws.send(JSON.stringify(upgradeData));
+    
+    // Timeout for upgrade response
+    setTimeout(() => {
+      if (this.pendingRequests.has(upgradeId)) {
+        console.log(`⏰ WebSocket upgrade timeout: ${upgradeId}`);
+        this.pendingRequests.delete(upgradeId);
+        socket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
+        socket.destroy();
+      }
+    }, 10000);
+  }
+
   handleTunnelResponse(message) {
+    if (message.type === 'websocket_upgrade_response') {
+      return this.handleWebSocketUpgradeResponse(message);
+    }
+    
     const pending = this.pendingRequests.get(message.requestId);
     if (!pending) {
       console.warn(`⚠️ No pending request found for ${message.requestId}`);
@@ -262,6 +351,87 @@ class TunnelServer {
       if (!res.headersSent) {
         res.status(500).json({ error: 'Internal server error' });
       }
+    }
+  }
+
+  handleWebSocketUpgradeResponse(message) {
+    const pending = this.pendingRequests.get(message.upgradeId);
+    if (!pending) {
+      console.warn(`⚠️ No pending WebSocket upgrade found for ${message.upgradeId}`);
+      return;
+    }
+
+    this.pendingRequests.delete(message.upgradeId);
+    const { socket, head } = pending;
+
+    if (message.success) {
+      // Send upgrade response to browser
+      const responseHeaders = [
+        'HTTP/1.1 101 Switching Protocols',
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
+        '', ''
+      ].join('\r\n');
+
+      socket.write(responseHeaders);
+      
+      console.log(`✅ WebSocket upgrade successful: ${message.upgradeId}`);
+      
+      // Now proxy WebSocket frames bidirectionally
+      this.setupWebSocketProxy(socket, message.upgradeId);
+      
+    } else {
+      console.log(`❌ WebSocket upgrade failed: ${message.upgradeId}`);
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      socket.destroy();
+    }
+  }
+
+  setupWebSocketProxy(browserSocket, upgradeId) {
+    // Store WebSocket connection for bidirectional communication
+    browserSocket.on('data', (data) => {
+      // Forward WebSocket frames from browser to client
+      const tunnel = Array.from(this.tunnels.values())
+        .find(t => t.ws.readyState === 1);
+      
+      if (tunnel) {
+        tunnel.ws.send(JSON.stringify({
+          type: 'websocket_frame',
+          upgradeId,
+          data: data.toString('base64')
+        }));
+      }
+    });
+
+    browserSocket.on('close', () => {
+      console.log(`🔌 Browser WebSocket closed: ${upgradeId}`);
+      // Notify client to close local WebSocket
+      const tunnel = Array.from(this.tunnels.values())
+        .find(t => t.ws.readyState === 1);
+      
+      if (tunnel) {
+        tunnel.ws.send(JSON.stringify({
+          type: 'websocket_close',
+          upgradeId
+        }));
+      }
+    });
+
+    browserSocket.on('error', (error) => {
+      console.error(`❌ Browser WebSocket error: ${upgradeId}`, error);
+    });
+
+    // Store reference for frames from client
+    this.pendingRequests.set(`ws_${upgradeId}`, { socket: browserSocket });
+  }
+
+  handleWebSocketFrame(message) {
+    const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
+    if (pending && pending.socket) {
+      // Forward frame from client to browser
+      const data = Buffer.from(message.data, 'base64');
+      pending.socket.write(data);
     }
   }
 
@@ -315,4 +485,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = TunnelServer; 
+module.exports = TunnelServer;

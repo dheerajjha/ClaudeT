@@ -205,6 +205,8 @@ class TCPTunnelServer {
     // Build HTTP request string
     const httpRequest = this.buildHTTPRequest(req, client.localPort);
     
+    console.log(`🔧 DEBUG: Sending HTTP request to client:`, httpRequest.toString().split('\r\n').slice(0, 5).join(' | '));
+    
     // Send TCP connection request to client
     client.ws.send(JSON.stringify({
       type: 'tcp_connect',
@@ -219,6 +221,7 @@ class TCPTunnelServer {
       if (client.tcpConnections.has(connectionId)) {
         client.tcpConnections.delete(connectionId);
         if (!res.headersSent) {
+          console.log(`⏰ Timeout for connection ${connectionId}`);
           res.status(504).json({ error: 'Gateway timeout' });
         }
       }
@@ -258,10 +261,16 @@ class TCPTunnelServer {
     if (!connection) return;
 
     const buffer = Buffer.from(data.data, 'base64');
+    console.log(`📨 DEBUG: Received ${buffer.length} bytes for connection ${data.connectionId}`);
     
     if (connection.type === 'http') {
       // Accumulate HTTP response data
       connection.buffer = Buffer.concat([connection.buffer, buffer]);
+      
+      // Clear any existing timeout
+      if (connection.timeout) {
+        clearTimeout(connection.timeout);
+      }
       
       // Try to parse HTTP response
       const response = this.parseHTTPResponse(connection.buffer);
@@ -277,7 +286,11 @@ class TCPTunnelServer {
           // Handle different content types properly
           const contentType = response.headers['content-type'] || response.headers['Content-Type'] || '';
           if (contentType.includes('application/json')) {
-            res.json(response.body);
+            try {
+              res.json(JSON.parse(response.body));
+            } catch {
+              res.send(response.body);
+            }
           } else if (contentType.includes('text/')) {
             res.send(response.body);
           } else {
@@ -285,6 +298,17 @@ class TCPTunnelServer {
           }
         }
         client.tcpConnections.delete(data.connectionId);
+      } else {
+        // Set a new timeout if we're still waiting for more data
+        connection.timeout = setTimeout(() => {
+          if (client.tcpConnections.has(data.connectionId)) {
+            const res = connection.res;
+            if (!res.headersSent) {
+              res.status(502).json({ error: 'Incomplete response from local server' });
+            }
+            client.tcpConnections.delete(data.connectionId);
+          }
+        }, 5000);
       }
     } else if (connection.type === 'websocket') {
       // Forward raw WebSocket data
@@ -301,7 +325,7 @@ class TCPTunnelServer {
     if (headerEndIndex === -1) return null; // Headers not complete yet
     
     const headersPart = str.substring(0, headerEndIndex);
-    const bodyPart = str.substring(headerEndIndex + 4);
+    const bodyBuffer = buffer.slice(headerEndIndex + 4);
     
     const lines = headersPart.split('\r\n');
     const statusLine = lines[0];
@@ -318,7 +342,40 @@ class TCPTunnelServer {
       }
     }
     
-    return { statusCode, headers, body: bodyPart };
+    // Check if we have the complete response
+    const contentLength = headers['content-length'] || headers['Content-Length'];
+    const transferEncoding = headers['transfer-encoding'] || headers['Transfer-Encoding'];
+    
+    if (contentLength) {
+      const expectedLength = parseInt(contentLength);
+      if (bodyBuffer.length < expectedLength) {
+        return null; // Need more data
+      }
+      return { statusCode, headers, body: bodyBuffer.slice(0, expectedLength).toString() };
+    } else if (transferEncoding && transferEncoding.toLowerCase().includes('chunked')) {
+      // For chunked encoding, look for end marker
+      const bodyStr = bodyBuffer.toString();
+      if (!bodyStr.includes('\r\n0\r\n\r\n')) {
+        return null; // Chunked response not complete
+      }
+      // Parse chunked response (simplified)
+      const chunks = [];
+      let pos = 0;
+      while (pos < bodyStr.length) {
+        const chunkSizeEnd = bodyStr.indexOf('\r\n', pos);
+        if (chunkSizeEnd === -1) break;
+        const chunkSizeHex = bodyStr.substring(pos, chunkSizeEnd);
+        const chunkSize = parseInt(chunkSizeHex, 16);
+        if (chunkSize === 0) break;
+        pos = chunkSizeEnd + 2;
+        chunks.push(bodyStr.substring(pos, pos + chunkSize));
+        pos += chunkSize + 2;
+      }
+      return { statusCode, headers, body: chunks.join('') };
+    } else {
+      // No content-length or chunked encoding, assume complete
+      return { statusCode, headers, body: bodyBuffer.toString() };
+    }
   }
 
   handleTCPCloseFromClient(tunnelId, data) {

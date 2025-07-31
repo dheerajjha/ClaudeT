@@ -296,9 +296,9 @@ if (require.main === module) {
   // Quick test mode - skip all prompts
   if (process.argv.includes('--quick')) {
     console.log('🚀 Quick Test Mode - TCP Tunnel Client');
-    console.log('📋 Using defaults: localhost:3000 → claude.grabr.cc\n');
+    console.log('📋 Using defaults: localhost:3008 → claude.grabr.cc\n');
     
-    const client = new TCPTunnelClient(3000, 'claude');
+    const client = new TCPTunnelClient(3008, 'claude');
     client.connect();
   } else {
     startClient().catch(console.error);

@@ -2,6 +2,19 @@
 
 Your own ngrok alternative - expose local services to the internet with custom domain and HTTPS.
 
+## 🔧 Two Tunnel Modes
+
+### 🎯 **HTTP/WebSocket Tunnel** (Current - server.js/client.js)
+- ✅ HTTP/HTTPS requests
+- ✅ WebSocket connections  
+- ❌ Complex protocol handling
+
+### 🚀 **TCP Tunnel** (New - tcp-tunnel-server.js/tcp-tunnel-client.js)
+- ✅ **ALL TCP traffic** (HTTP, WebSocket, databases, SSH, etc.)
+- ✅ Protocol-agnostic 
+- ✅ Simpler, more reliable
+- ✅ **Recommended for comprehensive port forwarding**
+
 ## ✨ Features
 
 - 🌐 **Custom Subdomains**: `https://myapp.grabr.cc/` (your choice!)
@@ -14,20 +27,30 @@ Your own ngrok alternative - expose local services to the internet with custom d
 ## 🚀 Quick Start
 
 ### Server (Azure VM)
+
 ```bash
 git clone https://github.com/yourusername/mini-tunnel.git
 cd mini-tunnel
-sudo ./start-server.sh
+
+# Interactive script with mode selection
+sudo ./start-server.sh   # Choose: 1) HTTP/WebSocket or 2) TCP (recommended)
 ```
 
 ### Client (Local Machine)
 ```bash
-./start-client.sh
-# Single port: Enter port and subdomain
-# Multi-port: Choose 'y' to tunnel multiple services
-#   - API: localhost:3000 → api.grabr.cc
-#   - Frontend: localhost:3001 → app.grabr.cc  
-#   - Docs: localhost:8080 → docs.grabr.cc
+# Interactive script with mode selection  
+./start-client.sh        # Choose: 1) HTTP/WebSocket or 2) TCP (recommended)
+```
+
+**Alternative direct commands:**
+```bash
+# Legacy HTTP/WebSocket mode
+npm run server           # Server
+npm run client           # Client
+
+# Recommended TCP mode  
+npm run tcp-server       # Server
+npm run tcp-client       # Client
 ```
 
 ## 🌐 URLs
@@ -95,35 +118,49 @@ const ws = new WebSocket('wss://myapp.grabr.cc/chat');
 - 📊 **Live Data**: Real-time dashboards
 - 🔄 **Live Updates**: Push notifications
 
-### 🧪 Test WebSocket Tunneling
+### 🧪 Test Your Tunnel
 
-**Method 1: Web Browser (Recommended)**
+**Test with any application:**
 ```bash
-# Start the WebSocket test server
-npm run test-ws
+# Start your local application (e.g., React, Express, etc.)
+npm start                # (or whatever starts your app)
 
-# In another terminal, tunnel it
+# In another terminal, start the tunnel
 ./start-client.sh
-# Choose port 3000, subdomain "chat"
+# Choose TCP mode, enter your app's port
 
-# Visit: https://chat.grabr.cc
-# Click "Connect" to test WSS tunneling!
+# Your app is now available at: https://yoursubdomain.grabr.cc/
 ```
 
-**Method 2: Command Line**
-```bash
-# Test with our WebSocket client
-node test-websocket-client.js wss://yoursubdomain.grabr.cc/ws
-
-# ❌ DON'T use curl - it doesn't support WebSocket properly:
-# curl wss://... (This won't work!)
-```
-
-**Method 3: From Your Code**
+**WebSocket Testing:**
 ```javascript
-// Frontend code can directly connect
+// Your code works unchanged - just use the tunnel URL
 const ws = new WebSocket('wss://yoursubdomain.grabr.cc/ws');
 ws.onopen = () => console.log('Connected via tunnel!');
+```
+
+## 📁 Project Structure
+
+```
+mini-tunnel/
+├── 🚀 TCP Tunnel (Recommended)
+│   ├── tcp-tunnel-server.js    # Universal TCP tunnel server
+│   └── tcp-tunnel-client.js    # Universal TCP tunnel client
+│
+├── 🔧 HTTP/WebSocket Tunnel (Legacy)  
+│   ├── server.js               # HTTP/WebSocket specific server
+│   └── client.js               # HTTP/WebSocket specific client
+│
+├── 🎯 Easy Start Scripts
+│   ├── start-server.sh         # Interactive server startup
+│   └── start-client.sh         # Interactive client startup  
+│
+├── ⚙️ Configuration
+│   ├── config.json             # Legacy tunnel settings
+│   └── package.json            # Project dependencies
+│
+└── 📖 Documentation
+    └── README.md               # This file
 ```
 
 ## 🎯 That's It!

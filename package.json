@@ -6,7 +6,10 @@
   "scripts": {
     "server": "node server.js",
     "client": "node client.js",
-    "test-ws": "node test-websocket-server.js"
+    "tcp-server": "node tcp-tunnel-server.js",
+    "tcp-client": "node tcp-tunnel-client.js",
+    "start-server": "./start-server.sh",
+    "start-client": "./start-client.sh"
   },
   "keywords": [
     "tunnel",

@@ -114,6 +114,10 @@ class TunnelClient {
         this.handleWebSocketFrame(message);
         break;
 
+      case 'websocket_json_message':
+        this.handleWebSocketJsonMessage(message);
+        break;
+
       case 'websocket_close':
         this.handleWebSocketClose(message);
         break;
@@ -193,14 +197,44 @@ class TunnelClient {
 
       localWs.on('message', (data) => {
         // Forward message from local WebSocket to server
-        // Handle both text and binary frames
-        const isBuffer = Buffer.isBuffer(data);
-        this.sendMessage({
-          type: 'websocket_frame',
-          upgradeId: message.upgradeId,
-          data: data.toString('base64'),
-          isBinary: isBuffer
-        });
+        const isTerminal = message.url.includes('/terminal');
+        
+        if (isTerminal) {
+          // For terminal WebSockets, the local server sends JSON responses
+          // We need to send these back as properly formatted WebSocket frames
+          try {
+            const jsonResponse = JSON.parse(data.toString());
+            console.log(`📨 Terminal response:`, jsonResponse);
+            
+            this.sendMessage({
+              type: 'websocket_response',
+              upgradeId: message.upgradeId,
+              jsonResponse: jsonResponse,
+              isTerminal: true
+            });
+          } catch (e) {
+            // If it's not JSON, treat as regular text
+            console.log(`📨 Terminal text response:`, data.toString());
+            this.sendMessage({
+              type: 'websocket_response',
+              upgradeId: message.upgradeId,
+              textResponse: data.toString(),
+              isTerminal: true
+            });
+          }
+        } else {
+          // For non-terminal WebSockets, handle as before
+          const isBuffer = Buffer.isBuffer(data);
+          
+          this.sendMessage({
+            type: 'websocket_frame',
+            upgradeId: message.upgradeId,
+            data: data.toString('base64'),
+            isBinary: isBuffer,
+            fromLocal: true,
+            isTerminal: false
+          });
+        }
       });
 
       localWs.on('close', () => {
@@ -247,6 +281,15 @@ class TunnelClient {
       } else {
         localWs.send(data.toString());
       }
+    }
+  }
+
+  handleWebSocketJsonMessage(message) {
+    const localWs = this.localWebSockets?.get(message.upgradeId);
+    if (localWs && localWs.readyState === 1) {
+      // Forward JSON message from server to local WebSocket
+      console.log(`📤 Sending JSON message to local WebSocket:`, message.jsonMessage);
+      localWs.send(JSON.stringify(message.jsonMessage));
     }
   }
 

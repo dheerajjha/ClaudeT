@@ -9,7 +9,7 @@
     "start": "node tunnel-server.js",
     "test:websockets": "node test-websockets.js",
     "debug:websockets": "node debug-websockets.js",
-    "monitor": "node simple-monitor.js",
+    "test:simple": "node simple-network-test.js",
     "install-playwright": "npx playwright install chromium"
   },
   "keywords": [

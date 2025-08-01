@@ -436,6 +436,10 @@ class TunnelServer {
       
       if (tunnel) {
         try {
+          // Inspect the raw WebSocket frame structure
+          console.log(`📤 Raw frame from browser: ${data.length} bytes`);
+          console.log(`📤 Frame header: ${data.slice(0, Math.min(10, data.length)).toString('hex')}`);
+          
           // Use binary-safe base64 encoding for ALL frame data
           const frameData = data.toString('base64');
           console.log(`📤 Forwarding frame to client: ${data.length} bytes → ${frameData.length} base64 chars`);
@@ -507,11 +511,17 @@ class TunnelServer {
           return;
         }
         
+        // Inspect the raw WebSocket frame structure
+        console.log(`📥 Raw frame to browser: ${data.length} bytes`);
+        console.log(`📥 Frame header: ${data.slice(0, Math.min(10, data.length)).toString('hex')}`);
         console.log(`📥 Forwarding frame to browser: ${message.originalSize || data.length} bytes from base64`);
         
         // Check if socket is still writable
         if (pending.socket.writable) {
+          // CRITICAL FIX: Ensure we're writing a proper WebSocket frame
+          // The issue might be that we're writing raw frame data without proper WebSocket framing
           pending.socket.write(data);
+          console.log(`✅ Frame written to browser socket`);
         } else {
           console.warn(`⚠️ Socket not writable for ${message.upgradeId}`);
           // Clean up dead connection

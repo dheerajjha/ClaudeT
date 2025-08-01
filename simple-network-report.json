@@ -1,83 +1,89 @@
 {
-  "timestamp": "2025-08-01T10:06:53.908Z",
+  "timestamp": "2025-08-01T10:08:19.144Z",
   "comparison": {
     "localhost": {
-      "totalLogs": 17,
-      "wsLogs": 1,
+      "totalLogs": 36,
+      "wsLogs": 9,
       "last5": [
         {
-          "type": "request",
-          "method": "GET",
-          "url": "http://localhost:3008/favicon.svg",
-          "timestamp": "2025-08-01T10:06:30.635Z",
-          "isWebSocket": false
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 40,
+          "timestamp": "2025-08-01T10:08:00.404Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\u001b[?1034h\"}"
         },
         {
-          "type": "websocket_connect",
-          "url": "ws://localhost:3008/ws",
-          "timestamp": "2025-08-01T10:06:30.635Z",
-          "isWebSocket": true
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 37,
+          "timestamp": "2025-08-01T10:08:00.404Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"bash-3.2$ \"}"
+        },
+        {
+          "type": "websocket_sent",
+          "url": "ws://localhost:3008/terminal",
+          "size": 38,
+          "timestamp": "2025-08-01T10:08:00.471Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 47,
+          "timestamp": "2025-08-01T10:08:00.472Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\r\\u001b[Kbash-3.2$ \"}"
         },
         {
           "type": "response",
           "status": 200,
-          "url": "http://localhost:3008/favicon.svg",
-          "timestamp": "2025-08-01T10:06:30.638Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "http://localhost:3008/api/projects",
-          "timestamp": "2025-08-01T10:06:30.765Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://api.github.com/repos/siteboon/claudecodeui/releases/latest",
-          "timestamp": "2025-08-01T10:06:30.901Z",
+          "url": "http://localhost:3008/api/projects/-Users-dheeraj-jha-Uber-ios/files",
+          "timestamp": "2025-08-01T10:08:01.024Z",
           "isWebSocket": false
         }
       ]
     },
     "production": {
-      "totalLogs": 14,
-      "wsLogs": 0,
+      "totalLogs": 38,
+      "wsLogs": 6,
       "last5": [
         {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-browser.png",
-          "timestamp": "2025-08-01T10:06:42.879Z",
-          "isWebSocket": false
+          "type": "websocket_sent",
+          "url": "wss://claude.grabr.cc/terminal",
+          "size": 80,
+          "timestamp": "2025-08-01T10:08:13.767Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"init\",\"projectPath\":\"/Users/dheeraj.jha/Uber/ios\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_sent",
+          "url": "wss://claude.grabr.cc/terminal",
+          "size": 38,
+          "timestamp": "2025-08-01T10:08:13.868Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_error",
+          "url": "wss://claude.grabr.cc/terminal",
+          "error": "Invalid frame header",
+          "timestamp": "2025-08-01T10:08:14.226Z",
+          "isWebSocket": true
+        },
+        {
+          "type": "websocket_close",
+          "url": "wss://claude.grabr.cc/terminal",
+          "timestamp": "2025-08-01T10:08:14.226Z",
+          "isWebSocket": true
         },
         {
           "type": "response",
           "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-cloud.png",
-          "timestamp": "2025-08-01T10:06:42.884Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-error.png",
-          "timestamp": "2025-08-01T10:06:42.884Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-server.png",
-          "timestamp": "2025-08-01T10:06:42.885Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-ok.png",
-          "timestamp": "2025-08-01T10:06:42.885Z",
+          "url": "https://claude.grabr.cc/api/projects/-Users-dheeraj-jha-Uber-ios/files",
+          "timestamp": "2025-08-01T10:08:16.813Z",
           "isWebSocket": false
         }
       ]
@@ -85,40 +91,45 @@
   },
   "detailed": {
     "Localhost": {
-      "totalLogs": 17,
+      "totalLogs": 36,
       "last5Logs": [
         {
-          "type": "request",
-          "method": "GET",
-          "url": "http://localhost:3008/favicon.svg",
-          "timestamp": "2025-08-01T10:06:30.635Z",
-          "isWebSocket": false
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 40,
+          "timestamp": "2025-08-01T10:08:00.404Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\u001b[?1034h\"}"
         },
         {
-          "type": "websocket_connect",
-          "url": "ws://localhost:3008/ws",
-          "timestamp": "2025-08-01T10:06:30.635Z",
-          "isWebSocket": true
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 37,
+          "timestamp": "2025-08-01T10:08:00.404Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"bash-3.2$ \"}"
+        },
+        {
+          "type": "websocket_sent",
+          "url": "ws://localhost:3008/terminal",
+          "size": 38,
+          "timestamp": "2025-08-01T10:08:00.471Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 47,
+          "timestamp": "2025-08-01T10:08:00.472Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\r\\u001b[Kbash-3.2$ \"}"
         },
         {
           "type": "response",
           "status": 200,
-          "url": "http://localhost:3008/favicon.svg",
-          "timestamp": "2025-08-01T10:06:30.638Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "http://localhost:3008/api/projects",
-          "timestamp": "2025-08-01T10:06:30.765Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://api.github.com/repos/siteboon/claudecodeui/releases/latest",
-          "timestamp": "2025-08-01T10:06:30.901Z",
+          "url": "http://localhost:3008/api/projects/-Users-dheeraj-jha-Uber-ios/files",
+          "timestamp": "2025-08-01T10:08:01.024Z",
           "isWebSocket": false
         }
       ],
@@ -126,51 +137,156 @@
         {
           "type": "websocket_connect",
           "url": "ws://localhost:3008/ws",
-          "timestamp": "2025-08-01T10:06:30.635Z",
+          "timestamp": "2025-08-01T10:07:52.755Z",
           "isWebSocket": true
+        },
+        {
+          "type": "websocket_connect",
+          "url": "ws://localhost:3008/terminal",
+          "timestamp": "2025-08-01T10:08:00.118Z",
+          "isWebSocket": true
+        },
+        {
+          "type": "websocket_sent",
+          "url": "ws://localhost:3008/terminal",
+          "size": 80,
+          "timestamp": "2025-08-01T10:08:00.370Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"init\",\"projectPath\":\"/Users/dheeraj.jha/Uber/ios\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 104,
+          "timestamp": "2025-08-01T10:08:00.371Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\u001b[36mPlain terminal session in: /Users/dheeraj.jha/Uber/ios\\u001b[0m\\r"
+        },
+        {
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 218,
+          "timestamp": "2025-08-01T10:08:00.403Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\r\\nThe default interactive shell is now zsh.\\r\\nTo update your account to "
+        },
+        {
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 40,
+          "timestamp": "2025-08-01T10:08:00.404Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\u001b[?1034h\"}"
+        },
+        {
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 37,
+          "timestamp": "2025-08-01T10:08:00.404Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"bash-3.2$ \"}"
+        },
+        {
+          "type": "websocket_sent",
+          "url": "ws://localhost:3008/terminal",
+          "size": 38,
+          "timestamp": "2025-08-01T10:08:00.471Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_received",
+          "url": "ws://localhost:3008/terminal",
+          "size": 47,
+          "timestamp": "2025-08-01T10:08:00.472Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"output\",\"data\":\"\\r\\u001b[Kbash-3.2$ \"}"
         }
       ]
     },
     "Production": {
-      "totalLogs": 14,
+      "totalLogs": 38,
       "last5Logs": [
         {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-browser.png",
-          "timestamp": "2025-08-01T10:06:42.879Z",
-          "isWebSocket": false
+          "type": "websocket_sent",
+          "url": "wss://claude.grabr.cc/terminal",
+          "size": 80,
+          "timestamp": "2025-08-01T10:08:13.767Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"init\",\"projectPath\":\"/Users/dheeraj.jha/Uber/ios\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_sent",
+          "url": "wss://claude.grabr.cc/terminal",
+          "size": 38,
+          "timestamp": "2025-08-01T10:08:13.868Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_error",
+          "url": "wss://claude.grabr.cc/terminal",
+          "error": "Invalid frame header",
+          "timestamp": "2025-08-01T10:08:14.226Z",
+          "isWebSocket": true
+        },
+        {
+          "type": "websocket_close",
+          "url": "wss://claude.grabr.cc/terminal",
+          "timestamp": "2025-08-01T10:08:14.226Z",
+          "isWebSocket": true
         },
         {
           "type": "response",
           "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-cloud.png",
-          "timestamp": "2025-08-01T10:06:42.884Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-error.png",
-          "timestamp": "2025-08-01T10:06:42.884Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-server.png",
-          "timestamp": "2025-08-01T10:06:42.885Z",
-          "isWebSocket": false
-        },
-        {
-          "type": "response",
-          "status": 200,
-          "url": "https://claude.grabr.cc/cdn-cgi/images/cf-icon-ok.png",
-          "timestamp": "2025-08-01T10:06:42.885Z",
+          "url": "https://claude.grabr.cc/api/projects/-Users-dheeraj-jha-Uber-ios/files",
+          "timestamp": "2025-08-01T10:08:16.813Z",
           "isWebSocket": false
         }
       ],
-      "wsLogs": []
+      "wsLogs": [
+        {
+          "type": "websocket_connect",
+          "url": "wss://claude.grabr.cc/ws",
+          "timestamp": "2025-08-01T10:08:07.412Z",
+          "isWebSocket": true
+        },
+        {
+          "type": "websocket_connect",
+          "url": "wss://claude.grabr.cc/terminal",
+          "timestamp": "2025-08-01T10:08:11.857Z",
+          "isWebSocket": true
+        },
+        {
+          "type": "websocket_sent",
+          "url": "wss://claude.grabr.cc/terminal",
+          "size": 80,
+          "timestamp": "2025-08-01T10:08:13.767Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"init\",\"projectPath\":\"/Users/dheeraj.jha/Uber/ios\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_sent",
+          "url": "wss://claude.grabr.cc/terminal",
+          "size": 38,
+          "timestamp": "2025-08-01T10:08:13.868Z",
+          "isWebSocket": true,
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}"
+        },
+        {
+          "type": "websocket_error",
+          "url": "wss://claude.grabr.cc/terminal",
+          "error": "Invalid frame header",
+          "timestamp": "2025-08-01T10:08:14.226Z",
+          "isWebSocket": true
+        },
+        {
+          "type": "websocket_close",
+          "url": "wss://claude.grabr.cc/terminal",
+          "timestamp": "2025-08-01T10:08:14.226Z",
+          "isWebSocket": true
+        }
+      ]
     }
   }
 }

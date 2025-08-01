@@ -383,10 +383,10 @@ class TunnelServer {
           return;
         }
         
-        // Send upgrade response to browser
+        // Send proper HTTP 101 upgrade response
         const responseHeaders = [
           'HTTP/1.1 101 Switching Protocols',
-          'Upgrade: websocket', 
+          'Upgrade: websocket',
           'Connection: Upgrade',
           `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
           '', ''
@@ -394,7 +394,6 @@ class TunnelServer {
 
         console.log(`✅ Sending WebSocket upgrade response: ${message.upgradeId}`);
         console.log(`📋 Accept key: ${message.webSocketAccept}`);
-        console.log(`📋 Response length: ${responseHeaders.length} bytes`);
         
         // Check socket state before writing
         if (!socket.writable) {
@@ -406,12 +405,13 @@ class TunnelServer {
         socket.write(responseHeaders);
         console.log(`✅ WebSocket upgrade headers sent: ${message.upgradeId}`);
         
-        // Now proxy WebSocket frames bidirectionally
+        // Now set up raw WebSocket frame proxying
         this.setupWebSocketProxy(socket, message.upgradeId);
         
       } catch (error) {
-        console.error(`❌ Error writing upgrade response: ${message.upgradeId}`, error);
+        console.error(`❌ Error setting up WebSocket tunnel: ${message.upgradeId}`, error);
         try {
+          socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
           socket.destroy();
         } catch (destroyError) {
           console.error(`❌ Error destroying socket: ${destroyError}`);
@@ -444,7 +444,7 @@ class TunnelServer {
           const frameData = data.toString('base64');
           console.log(`📤 Forwarding frame to client: ${data.length} bytes → ${frameData.length} base64 chars`);
           
-          // CRITICAL: Ensure we're sending valid JSON over the control WebSocket
+          // Send frame message to tunnel client
           const frameMessage = {
             type: 'websocket_frame',
             upgradeId,
@@ -453,7 +453,6 @@ class TunnelServer {
             originalSize: data.length
           };
           
-          // Send as JSON string over the tunnel control WebSocket
           const jsonString = JSON.stringify(frameMessage);
           console.log(`🔧 Sending frame message: ${jsonString.length} chars`);
           
@@ -470,7 +469,6 @@ class TunnelServer {
 
     browserSocket.on('close', () => {
       console.log(`🔌 Browser WebSocket closed: ${upgradeId}`);
-      // Notify client to close local WebSocket
       const tunnel = Array.from(this.tunnels.values())
         .find(t => t.ws.readyState === 1);
       
@@ -502,7 +500,7 @@ class TunnelServer {
           return;
         }
         
-        // Forward frame from client to browser (completely agnostic)
+        // Forward frame from client to browser
         const data = Buffer.from(message.data, 'base64');
         
         // Validate decoded data
@@ -516,15 +514,13 @@ class TunnelServer {
         console.log(`📥 Frame header: ${data.slice(0, Math.min(10, data.length)).toString('hex')}`);
         console.log(`📥 Forwarding frame to browser: ${message.originalSize || data.length} bytes from base64`);
         
-        // Check if socket is still writable
-        if (pending.socket.writable) {
-          // CRITICAL FIX: Ensure we're writing a proper WebSocket frame
-          // The issue might be that we're writing raw frame data without proper WebSocket framing
+        // CRITICAL FIX: Write the WebSocket frame directly to the browser socket
+        // After HTTP upgrade, the socket expects WebSocket protocol frames
+        if (pending.socket.writable && !pending.socket.destroyed) {
           pending.socket.write(data);
-          console.log(`✅ Frame written to browser socket`);
+          console.log(`✅ WebSocket frame written to browser socket`);
         } else {
-          console.warn(`⚠️ Socket not writable for ${message.upgradeId}`);
-          // Clean up dead connection
+          console.warn(`⚠️ Socket not writable or destroyed for ${message.upgradeId}`);
           this.pendingRequests.delete(`ws_${message.upgradeId}`);
         }
         

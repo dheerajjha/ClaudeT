@@ -177,10 +177,14 @@ class TunnelClient {
         
         // Generate WebSocket accept key
         const key = message.headers['sec-websocket-key'];
+        console.log(`🔑 WebSocket key: ${key}`);
+        
         const acceptKey = crypto
           .createHash('sha1')
           .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
           .digest('base64');
+        
+        console.log(`🔑 Generated accept key: ${acceptKey}`);
 
         // Send success response to server
         this.sendMessage({
@@ -189,6 +193,8 @@ class TunnelClient {
           success: true,
           webSocketAccept: acceptKey
         });
+        
+        console.log(`📤 Sent WebSocket upgrade response for ${message.upgradeId}`);
       });
 
       localWs.on('message', (data, isBinary) => {

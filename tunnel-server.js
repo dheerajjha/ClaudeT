@@ -362,6 +362,8 @@ class TunnelServer {
   }
 
   handleWebSocketUpgradeResponse(message) {
+    console.log(`🔄 Processing WebSocket upgrade response: ${message.upgradeId}, success: ${message.success}`);
+    
     const pending = this.pendingRequests.get(message.upgradeId);
     if (!pending) {
       console.warn(`⚠️ No pending WebSocket upgrade found for ${message.upgradeId}`);
@@ -372,29 +374,48 @@ class TunnelServer {
     const { socket, head } = pending;
 
     if (message.success) {
-      // Send upgrade response to browser
-      const responseHeaders = [
-        'HTTP/1.1 101 Switching Protocols',
-        'Upgrade: websocket', 
-        'Connection: Upgrade',
-        `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
-        '', ''
-      ].join('\r\n');
-
-      console.log(`✅ Sending WebSocket upgrade response: ${message.upgradeId}`);
-      console.log(`📋 Response headers: ${responseHeaders.replace(/\r\n/g, '\\r\\n')}`);
-      
       try {
-        socket.write(responseHeaders);
+        // Ensure we have a valid accept key
+        if (!message.webSocketAccept) {
+          console.error(`❌ Missing WebSocket accept key for ${message.upgradeId}`);
+          socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+          socket.destroy();
+          return;
+        }
         
-        console.log(`✅ WebSocket upgrade successful: ${message.upgradeId}`);
+        // Send upgrade response to browser
+        const responseHeaders = [
+          'HTTP/1.1 101 Switching Protocols',
+          'Upgrade: websocket', 
+          'Connection: Upgrade',
+          `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
+          '', ''
+        ].join('\r\n');
+
+        console.log(`✅ Sending WebSocket upgrade response: ${message.upgradeId}`);
+        console.log(`📋 Accept key: ${message.webSocketAccept}`);
+        console.log(`📋 Response length: ${responseHeaders.length} bytes`);
+        
+        // Check socket state before writing
+        if (!socket.writable) {
+          console.error(`❌ Socket not writable for ${message.upgradeId}`);
+          socket.destroy();
+          return;
+        }
+        
+        socket.write(responseHeaders);
+        console.log(`✅ WebSocket upgrade headers sent: ${message.upgradeId}`);
         
         // Now proxy WebSocket frames bidirectionally
         this.setupWebSocketProxy(socket, message.upgradeId);
         
       } catch (error) {
         console.error(`❌ Error writing upgrade response: ${message.upgradeId}`, error);
-        socket.destroy();
+        try {
+          socket.destroy();
+        } catch (destroyError) {
+          console.error(`❌ Error destroying socket: ${destroyError}`);
+        }
       }
       
     } else {
@@ -414,17 +435,32 @@ class TunnelServer {
         .find(t => t.ws.readyState === 1);
       
       if (tunnel) {
-        // Use binary-safe base64 encoding for ALL frame data
-        const frameData = data.toString('base64');
-        console.log(`📤 Forwarding frame to client: ${data.length} bytes → ${frameData.length} base64 chars`);
-        
-        tunnel.ws.send(JSON.stringify({
-          type: 'websocket_frame',
-          upgradeId,
-          data: frameData,
-          direction: 'to_local',
-          originalSize: data.length
-        }));
+        try {
+          // Use binary-safe base64 encoding for ALL frame data
+          const frameData = data.toString('base64');
+          console.log(`📤 Forwarding frame to client: ${data.length} bytes → ${frameData.length} base64 chars`);
+          
+          // CRITICAL: Ensure we're sending valid JSON over the control WebSocket
+          const frameMessage = {
+            type: 'websocket_frame',
+            upgradeId,
+            data: frameData,
+            direction: 'to_local',
+            originalSize: data.length
+          };
+          
+          // Send as JSON string over the tunnel control WebSocket
+          const jsonString = JSON.stringify(frameMessage);
+          console.log(`🔧 Sending frame message: ${jsonString.length} chars`);
+          
+          if (tunnel.ws.readyState === 1) {
+            tunnel.ws.send(jsonString);
+          } else {
+            console.warn(`⚠️ Tunnel WebSocket not ready for ${upgradeId}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error encoding frame data: ${upgradeId}`, error);
+        }
       }
     });
 
@@ -434,7 +470,7 @@ class TunnelServer {
       const tunnel = Array.from(this.tunnels.values())
         .find(t => t.ws.readyState === 1);
       
-      if (tunnel) {
+      if (tunnel && tunnel.ws.readyState === 1) {
         tunnel.ws.send(JSON.stringify({
           type: 'websocket_close',
           upgradeId

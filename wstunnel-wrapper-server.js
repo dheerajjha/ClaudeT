@@ -37,41 +37,55 @@ class WSTunnelServerWrapper {
   }
 
   setupRoutes() {
-    // Health check
+    // Health check (matching original tunnel format)
     this.app.get('/health', (req, res) => {
-      res.json({ 
-        status: 'ok', 
-        activeTunnels: this.activeTunnels.size,
+      const activeTunnels = Array.from(this.activeTunnels.values())
+        .filter(t => t.connected);
+
+      res.json({
+        status: 'healthy',
+        activeTunnels: activeTunnels.length,
         wstunnelRunning: this.wstunnelProcess && !this.wstunnelProcess.killed,
+        tunnels: activeTunnels.map(t => ({
+          id: t.id,
+          localPort: t.localPort,
+          connectedAt: t.connectedAt,
+          requestCount: t.requestCount || 0,
+          protocol: t.protocol
+        })),
         timestamp: new Date().toISOString()
       });
     });
 
-    // Dashboard
+    // Dashboard (matching original tunnel format)
     this.app.get('/dashboard', (req, res) => {
-      const tunnels = Array.from(this.activeTunnels.entries()).map(([id, tunnel]) => ({
-        id,
-        localPort: tunnel.localPort,
-        localHost: tunnel.localHost,
-        connectedAt: tunnel.connectedAt,
-        subdomainUrl: `https://${id}.${this.config.domain}/`
-      }));
+      const activeTunnels = Array.from(this.activeTunnels.values())
+        .filter(t => t.connected);
 
       res.json({
-        server: {
-          mode: 'WST Tunnel Wrapper',
+        server: 'WST Tunnel Wrapper',
+        status: 'running',
+        activeTunnels: activeTunnels.length,
+        tunnels: activeTunnels.map(t => ({
+          id: t.id,
+          url: `https://${t.id}.${this.config.domain}/`,
+          localPort: t.localPort,
+          connectedAt: t.connectedAt,
+          requestCount: t.requestCount || 0,
+          protocol: t.protocol,
+          localHost: t.localHost
+        })),
+        wstunnel: {
+          running: this.wstunnelProcess && !this.wstunnelProcess.killed,
+          pid: this.wstunnelProcess ? this.wstunnelProcess.pid : null,
           serverPort: this.config.serverPort,
           tunnelPort: this.config.tunnelPort,
           domain: this.config.domain
         },
-        tunnels,
-        wstunnel: {
-          running: this.wstunnelProcess && !this.wstunnelProcess.killed,
-          pid: this.wstunnelProcess ? this.wstunnelProcess.pid : null
-        },
-        info: {
-          message: 'WST tunnel server wrapper - uses wstunnel binary for robust tunneling',
-          documentation: 'https://github.com/erebe/wstunnel'
+        features: {
+          websockets: 'Full WebSocket support with transparent proxying',
+          protocols: 'TCP, UDP, SOCKS5',
+          note: 'Excellent for SOCKS5 proxying and UDP tunneling'
         }
       });
     });
@@ -185,10 +199,20 @@ class WSTunnelServerWrapper {
       id: tunnelId,
       localPort: config.localPort,
       localHost: config.localHost || 'localhost',
-      connectedAt: new Date().toISOString()
+      protocol: config.protocol || 'tcp',
+      connectedAt: new Date().toISOString(),
+      connected: true,
+      requestCount: 0
     });
     
-    console.log(`📋 Registered tunnel: ${tunnelId} → ${config.localHost}:${config.localPort}`);
+    console.log(`📋 Registered tunnel: ${tunnelId} → ${config.protocol || 'tcp'}://${config.localHost || 'localhost'}:${config.localPort}`);
+  }
+
+  updateTunnelStats(tunnelId) {
+    const tunnel = this.activeTunnels.get(tunnelId);
+    if (tunnel) {
+      tunnel.requestCount = (tunnel.requestCount || 0) + 1;
+    }
   }
 
   unregisterTunnel(tunnelId) {

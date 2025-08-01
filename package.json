@@ -10,7 +10,9 @@
     "wstunnel-server": "node wstunnel-server.js",
     "wstunnel-client": "node wstunnel-client.js",
     "wst-server": "node wstunnel-wrapper-server.js",
-    "wst-client": "node wstunnel-wrapper-client.js"
+    "wst-client": "node wstunnel-wrapper-client.js",
+    "frp-server": "node frp-wrapper-server.js",
+    "frp-client": "node frp-wrapper-client.js"
   },
   "keywords": [
     "tunnel",

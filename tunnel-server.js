@@ -514,83 +514,35 @@ class TunnelServer {
         console.log(`📥 Frame header: ${data.slice(0, Math.min(10, data.length)).toString('hex')}`);
         console.log(`📥 Forwarding frame to browser: ${message.originalSize || data.length} bytes from base64`);
         
-        // CRITICAL FIX: Don't write raw WebSocket frames to browser socket
-        // The problem is that after HTTP upgrade, the browser expects WebSocket protocol
-        // But we're receiving complete WebSocket frames from local server and writing them raw
-        // Let's store a WebSocket instance for this connection instead
+        // CRITICAL FIX: The data we receive is a complete WebSocket frame from local server
+        // We need to write it directly to the browser socket, but the browser expects
+        // the exact same frame format. The issue might be double-framing or corruption.
+        // Let's write the frame directly and add detailed debugging
         if (pending.socket.writable && !pending.socket.destroyed) {
           try {
-            // Create or get WebSocket instance for this connection
-            if (!pending.websocket) {
-              const WebSocket = require('ws');
-              
-              // Create WebSocket instance from the existing socket after upgrade
-              pending.websocket = new WebSocket(null, [], {
-                socket: pending.socket,
-                skipUTF8Validation: true
-              });
-              
-              console.log(`🔌 Created WebSocket instance for ${message.upgradeId}`);
-            }
-            
-            // Parse the incoming frame to extract payload and send via WebSocket
-            let payload;
-            let isBinary = false;
-            let offset = 0;
-            
-            if (data.length >= 2) {
-              const firstByte = data[offset++];
-              const secondByte = data[offset++];
-              
-              const opcode = firstByte & 0x0F;
-              isBinary = (opcode === 0x2); // Binary frame
-              const masked = (secondByte & 0x80) === 0x80;
-              let payloadLength = secondByte & 0x7F;
-              
-              // Handle extended payload length
-              if (payloadLength === 126 && data.length >= offset + 2) {
-                payloadLength = data.readUInt16BE(offset);
-                offset += 2;
-              } else if (payloadLength === 127 && data.length >= offset + 8) {
-                offset += 4; // Skip high bits
-                payloadLength = data.readUInt32BE(offset);
-                offset += 4;
-              }
-              
-              // Handle masking
-              if (masked && data.length >= offset + 4) {
-                const maskingKey = data.slice(offset, offset + 4);
-                offset += 4;
-                
-                if (data.length >= offset + payloadLength) {
-                  payload = Buffer.alloc(payloadLength);
-                  for (let i = 0; i < payloadLength; i++) {
-                    payload[i] = data[offset + i] ^ maskingKey[i % 4];
-                  }
-                }
-              } else if (!masked && data.length >= offset + payloadLength) {
-                payload = data.slice(offset, offset + payloadLength);
-              }
-              
-              // Send via WebSocket
-              if (payload && pending.websocket.readyState === 1) {
-                pending.websocket.send(payload, { binary: isBinary });
-                console.log(`✅ WebSocket sent to browser: ${payload.length} bytes, binary=${isBinary}`);
-              } else {
-                console.warn(`⚠️ Could not send WebSocket frame for ${message.upgradeId}`);
-                // Fallback to raw write
-                pending.socket.write(data);
-              }
-            } else {
-              console.warn(`⚠️ Invalid frame data for ${message.upgradeId}`);
-              pending.socket.write(data);
-            }
-            
-          } catch (wsError) {
-            console.error(`❌ WebSocket error for ${message.upgradeId}:`, wsError);
-            // Always fallback to raw write
+            // Write the WebSocket frame directly to browser
+            // This should work because both ends use the same WebSocket protocol
             pending.socket.write(data);
-            console.log(`⚠️ Fallback: Raw frame written to browser socket`);
+            console.log(`✅ Raw WebSocket frame written to browser: ${data.length} bytes`);
+            
+            // Additional debugging - let's see what we're sending
+            if (data.length >= 2) {
+              const firstByte = data[0];
+              const secondByte = data[1];
+              const fin = (firstByte & 0x80) !== 0;
+              const opcode = firstByte & 0x0F;
+              const masked = (secondByte & 0x80) !== 0;
+              const payloadLen = secondByte & 0x7F;
+              
+              console.log(`📊 Frame analysis - FIN:${fin}, Opcode:${opcode}, Masked:${masked}, PayloadLen:${payloadLen}`);
+              
+              // Check if this looks like a valid WebSocket frame
+              if (opcode > 0x0A) {
+                console.warn(`⚠️ Suspicious opcode: ${opcode} - might be corrupted frame`);
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Error writing WebSocket frame to browser: ${message.upgradeId}`, error);
           }
         } else {
           console.warn(`⚠️ Socket not writable or destroyed for ${message.upgradeId}`);

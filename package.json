@@ -1,18 +1,15 @@
 {
   "name": "http-tunnel",
   "version": "2.0.0",
-  "description": "Simple HTTP tunnel over WebSocket - ngrok alternative",
+  "description": "Simple HTTP tunnel over WebSocket with excellent WebSocket support",
   "main": "tunnel-server.js",
   "scripts": {
     "server": "node tunnel-server.js",
     "client": "node tunnel-client.js",
     "start": "node tunnel-server.js",
-    "wstunnel-server": "node wstunnel-server.js",
-    "wstunnel-client": "node wstunnel-client.js",
-    "wst-server": "node wstunnel-wrapper-server.js",
-    "wst-client": "node wstunnel-wrapper-client.js",
-    "frp-server": "node frp-wrapper-server.js",
-    "frp-client": "node frp-wrapper-client.js"
+    "test:websockets": "node test-websockets.js",
+    "debug:websockets": "node debug-websockets.js",
+    "install-playwright": "npx playwright install chromium"
   },
   "keywords": [
     "tunnel",
@@ -20,7 +17,8 @@
     "websocket",
     "proxy",
     "ngrok",
-    "cloudflared"
+    "real-time",
+    "socket.io"
   ],
   "author": "HTTP Tunnel",
   "license": "MIT",
@@ -28,6 +26,9 @@
     "express": "^4.18.2",
     "ws": "^8.14.2",
     "http-proxy-middleware": "^2.0.6"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
   },
   "engines": {
     "node": ">=14.0.0"

@@ -375,21 +375,30 @@ class TunnelServer {
       // Send upgrade response to browser
       const responseHeaders = [
         'HTTP/1.1 101 Switching Protocols',
-        'Upgrade: websocket',
+        'Upgrade: websocket', 
         'Connection: Upgrade',
         `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
         '', ''
       ].join('\r\n');
 
-      socket.write(responseHeaders);
+      console.log(`✅ Sending WebSocket upgrade response: ${message.upgradeId}`);
+      console.log(`📋 Response headers: ${responseHeaders.replace(/\r\n/g, '\\r\\n')}`);
       
-      console.log(`✅ WebSocket upgrade successful: ${message.upgradeId}`);
-      
-      // Now proxy WebSocket frames bidirectionally
-      this.setupWebSocketProxy(socket, message.upgradeId);
+      try {
+        socket.write(responseHeaders);
+        
+        console.log(`✅ WebSocket upgrade successful: ${message.upgradeId}`);
+        
+        // Now proxy WebSocket frames bidirectionally
+        this.setupWebSocketProxy(socket, message.upgradeId);
+        
+      } catch (error) {
+        console.error(`❌ Error writing upgrade response: ${message.upgradeId}`, error);
+        socket.destroy();
+      }
       
     } else {
-      console.log(`❌ WebSocket upgrade failed: ${message.upgradeId}`);
+      console.log(`❌ WebSocket upgrade failed: ${message.upgradeId} - ${message.error}`);
       socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
       socket.destroy();
     }
@@ -405,11 +414,16 @@ class TunnelServer {
         .find(t => t.ws.readyState === 1);
       
       if (tunnel) {
+        // Use binary-safe base64 encoding for ALL frame data
+        const frameData = data.toString('base64');
+        console.log(`📤 Forwarding frame to client: ${data.length} bytes → ${frameData.length} base64 chars`);
+        
         tunnel.ws.send(JSON.stringify({
           type: 'websocket_frame',
           upgradeId,
-          data: data.toString('base64'),
-          direction: 'to_local'
+          data: frameData,
+          direction: 'to_local',
+          originalSize: data.length
         }));
       }
     });
@@ -441,9 +455,39 @@ class TunnelServer {
   handleWebSocketFrame(message) {
     const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
     if (pending && pending.socket) {
-      // Forward frame from client to browser (completely agnostic)
-      const data = Buffer.from(message.data, 'base64');
-      pending.socket.write(data);
+      try {
+        // Validate base64 data before decoding
+        if (!message.data || typeof message.data !== 'string') {
+          console.warn(`⚠️ Invalid frame data for ${message.upgradeId}: data is not a string`);
+          return;
+        }
+        
+        // Forward frame from client to browser (completely agnostic)
+        const data = Buffer.from(message.data, 'base64');
+        
+        // Validate decoded data
+        if (!data || data.length === 0) {
+          console.warn(`⚠️ Empty frame data after decoding for ${message.upgradeId}`);
+          return;
+        }
+        
+        console.log(`📥 Forwarding frame to browser: ${message.originalSize || data.length} bytes from base64`);
+        
+        // Check if socket is still writable
+        if (pending.socket.writable) {
+          pending.socket.write(data);
+        } else {
+          console.warn(`⚠️ Socket not writable for ${message.upgradeId}`);
+          // Clean up dead connection
+          this.pendingRequests.delete(`ws_${message.upgradeId}`);
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error handling WebSocket frame: ${message.upgradeId}`, error);
+        console.error(`❌ Frame data preview: ${message.data ? message.data.substring(0, 50) : 'null'}...`);
+      }
+    } else {
+      console.warn(`⚠️ No pending WebSocket connection found for frame: ${message.upgradeId}`);
     }
   }
 

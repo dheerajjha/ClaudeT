@@ -1,0 +1,149 @@
+{
+  "timestamp": "2025-08-01T05:40:40.511Z",
+  "comparison": {
+    "localhost": {
+      "connections": 2,
+      "messages": 7,
+      "errors": 0,
+      "networkRequests": 0
+    },
+    "production": {
+      "connections": 2,
+      "messages": 2,
+      "errors": 1,
+      "networkRequests": 0
+    }
+  },
+  "detailed": {
+    "Localhost": {
+      "connections": [
+        {
+          "url": "ws://localhost:3008/ws",
+          "timestamp": "2025-08-01T05:39:44.331Z",
+          "messagesSent": 0,
+          "messagesReceived": 0,
+          "closed": false
+        },
+        {
+          "url": "ws://localhost:3008/terminal",
+          "timestamp": "2025-08-01T05:40:07.526Z",
+          "messagesSent": 2,
+          "messagesReceived": 5,
+          "closed": false
+        }
+      ],
+      "messages": [
+        {
+          "direction": "sent",
+          "payload": "{\"type\":\"init\",\"projectPath\":\"/Users/dheeraj.jha/Uber/ios\",\"cols\":110,\"rows\":34}",
+          "payloadType": "string",
+          "size": 80,
+          "timestamp": "2025-08-01T05:40:07.779Z",
+          "environment": "Localhost"
+        },
+        {
+          "direction": "received",
+          "payload": "{\"type\":\"output\",\"data\":\"\\u001b[36mPlain terminal session in: /Users/dheeraj.jha/Uber/ios\\u001b[0m\\r\\n\"}",
+          "payloadType": "string",
+          "size": 104,
+          "timestamp": "2025-08-01T05:40:07.780Z",
+          "environment": "Localhost"
+        },
+        {
+          "direction": "received",
+          "payload": "{\"type\":\"output\",\"data\":\"\\r\\nThe default interactive shell is now zsh.\\r\\nTo update your account to use zsh, please run `chsh -s /bin/zsh`.\\r\\nFor more details, please visit https://support.apple.com/kb/HT208050.\\r\\n\"}",
+          "payloadType": "string",
+          "size": 218,
+          "timestamp": "2025-08-01T05:40:07.812Z",
+          "environment": "Localhost"
+        },
+        {
+          "direction": "received",
+          "payload": "{\"type\":\"output\",\"data\":\"\\u001b[?1034h\"}",
+          "payloadType": "string",
+          "size": 40,
+          "timestamp": "2025-08-01T05:40:07.812Z",
+          "environment": "Localhost"
+        },
+        {
+          "direction": "received",
+          "payload": "{\"type\":\"output\",\"data\":\"bash-3.2$ \"}",
+          "payloadType": "string",
+          "size": 37,
+          "timestamp": "2025-08-01T05:40:07.812Z",
+          "environment": "Localhost"
+        },
+        {
+          "direction": "sent",
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}",
+          "payloadType": "string",
+          "size": 38,
+          "timestamp": "2025-08-01T05:40:07.880Z",
+          "environment": "Localhost"
+        },
+        {
+          "direction": "received",
+          "payload": "{\"type\":\"output\",\"data\":\"\\r\\u001b[Kbash-3.2$ \"}",
+          "payloadType": "string",
+          "size": 47,
+          "timestamp": "2025-08-01T05:40:07.908Z",
+          "environment": "Localhost"
+        }
+      ],
+      "errors": [],
+      "networkRequests": [],
+      "consoleMessages": []
+    },
+    "Production": {
+      "connections": [
+        {
+          "url": "wss://claude.grabr.cc/ws",
+          "timestamp": "2025-08-01T05:40:18.527Z",
+          "messagesSent": 0,
+          "messagesReceived": 0,
+          "closed": false
+        },
+        {
+          "url": "wss://claude.grabr.cc/terminal",
+          "timestamp": "2025-08-01T05:40:24.858Z",
+          "messagesSent": 2,
+          "messagesReceived": 0,
+          "closed": true
+        }
+      ],
+      "messages": [
+        {
+          "direction": "sent",
+          "payload": "{\"type\":\"init\",\"projectPath\":\"/Users/dheeraj.jha/Uber/ios\",\"cols\":110,\"rows\":34}",
+          "payloadType": "string",
+          "size": 80,
+          "timestamp": "2025-08-01T05:40:25.789Z",
+          "environment": "Production"
+        },
+        {
+          "direction": "sent",
+          "payload": "{\"type\":\"resize\",\"cols\":110,\"rows\":34}",
+          "payloadType": "string",
+          "size": 38,
+          "timestamp": "2025-08-01T05:40:25.890Z",
+          "environment": "Production"
+        }
+      ],
+      "errors": [
+        {
+          "error": "Invalid frame header",
+          "timestamp": "2025-08-01T05:40:26.211Z",
+          "url": "wss://claude.grabr.cc/terminal"
+        }
+      ],
+      "networkRequests": [],
+      "consoleMessages": [
+        {
+          "type": "error",
+          "text": "WebSocket connection to 'wss://claude.grabr.cc/terminal' failed: Invalid frame header",
+          "timestamp": "2025-08-01T05:40:26.211Z"
+        }
+      ]
+    }
+  }
+}

@@ -191,13 +191,32 @@ class TunnelClient {
         });
       });
 
-      localWs.on('message', (data) => {
+      localWs.on('message', (data, isBinary) => {
         // Forward ALL messages from local WebSocket to server (completely agnostic)
+        // Handle both binary and text frames properly
+        let frameData;
+        let originalSize;
+        
+        if (Buffer.isBuffer(data)) {
+          // Binary frame
+          frameData = data.toString('base64');
+          originalSize = data.length;
+          console.log(`📤 Forwarding binary frame to server: ${originalSize} bytes`);
+        } else {
+          // Text frame - convert to buffer first for consistent handling
+          const buffer = Buffer.from(data);
+          frameData = buffer.toString('base64');
+          originalSize = buffer.length;
+          console.log(`📤 Forwarding text frame to server: ${originalSize} bytes`);
+        }
+        
         this.sendMessage({
           type: 'websocket_frame',
           upgradeId: message.upgradeId,
-          data: data.toString('base64'),
-          direction: 'to_browser'
+          data: frameData,
+          direction: 'to_browser',
+          originalSize: originalSize,
+          isBinary: isBinary
         });
       });
 
@@ -236,9 +255,19 @@ class TunnelClient {
   handleWebSocketFrame(message) {
     const localWs = this.localWebSockets?.get(message.upgradeId);
     if (localWs && localWs.readyState === 1) {
-      // Forward frame from server to local WebSocket (completely agnostic)
-      const data = Buffer.from(message.data, 'base64');
-      localWs.send(data, { binary: Buffer.isBuffer(data) });
+      try {
+        // Forward frame from server to local WebSocket (completely agnostic)
+        const data = Buffer.from(message.data, 'base64');
+        console.log(`📥 Forwarding frame to local WebSocket: ${message.originalSize || data.length} bytes`);
+        
+        // Send with proper binary flag
+        const isBinary = message.isBinary !== undefined ? message.isBinary : Buffer.isBuffer(data);
+        localWs.send(data, { binary: isBinary });
+      } catch (error) {
+        console.error(`❌ Error handling WebSocket frame: ${message.upgradeId}`, error);
+      }
+    } else {
+      console.warn(`⚠️ No local WebSocket connection found for frame: ${message.upgradeId}`);
     }
   }
 

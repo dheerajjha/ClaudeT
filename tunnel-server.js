@@ -514,35 +514,35 @@ class TunnelServer {
         console.log(`📥 Frame header: ${data.slice(0, Math.min(10, data.length)).toString('hex')}`);
         console.log(`📥 Forwarding frame to browser: ${message.originalSize || data.length} bytes from base64`);
         
-        // CRITICAL FIX: The data we receive is a complete WebSocket frame from local server
-        // We need to write it directly to the browser socket, but the browser expects
-        // the exact same frame format. The issue might be double-framing or corruption.
-        // Let's write the frame directly and add detailed debugging
+        // CRITICAL FIX: The data we receive is JSON application data, NOT raw WebSocket frames!
+        // The local server sends JSON like {"type":"output","data":"..."} 
+        // We need to create proper WebSocket frames for the browser
         if (pending.socket.writable && !pending.socket.destroyed) {
           try {
-            // Write the WebSocket frame directly to browser
-            // This should work because both ends use the same WebSocket protocol
-            pending.socket.write(data);
-            console.log(`✅ Raw WebSocket frame written to browser: ${data.length} bytes`);
+            // Check if the data looks like JSON (application data)
+            const dataStr = data.toString('utf8');
+            console.log(`🔍 Received data type: ${dataStr.substring(0, 50)}...`);
             
-            // Additional debugging - let's see what we're sending
-            if (data.length >= 2) {
-              const firstByte = data[0];
-              const secondByte = data[1];
-              const fin = (firstByte & 0x80) !== 0;
-              const opcode = firstByte & 0x0F;
-              const masked = (secondByte & 0x80) !== 0;
-              const payloadLen = secondByte & 0x7F;
+            if (dataStr.startsWith('{') && dataStr.includes('"type"')) {
+              // This is JSON application data - create a proper WebSocket text frame
+              console.log(`📝 Creating WebSocket text frame for JSON data: ${data.length} bytes`);
               
-              console.log(`📊 Frame analysis - FIN:${fin}, Opcode:${opcode}, Masked:${masked}, PayloadLen:${payloadLen}`);
+              // Create WebSocket text frame (opcode 1)
+              const frame = this.createWebSocketFrame(data, 1); // 1 = text frame
+              pending.socket.write(frame);
+              console.log(`✅ WebSocket text frame sent to browser: ${frame.length} bytes (payload: ${data.length})`);
+            } else {
+              // This might be binary data - create a binary frame
+              console.log(`📦 Creating WebSocket binary frame: ${data.length} bytes`);
               
-              // Check if this looks like a valid WebSocket frame
-              if (opcode > 0x0A) {
-                console.warn(`⚠️ Suspicious opcode: ${opcode} - might be corrupted frame`);
-              }
+              const frame = this.createWebSocketFrame(data, 2); // 2 = binary frame  
+              pending.socket.write(frame);
+              console.log(`✅ WebSocket binary frame sent to browser: ${frame.length} bytes (payload: ${data.length})`);
             }
           } catch (error) {
-            console.error(`❌ Error writing WebSocket frame to browser: ${message.upgradeId}`, error);
+            console.error(`❌ Error creating WebSocket frame for browser: ${message.upgradeId}`, error);
+            // Fallback: write raw data
+            pending.socket.write(data);
           }
         } else {
           console.warn(`⚠️ Socket not writable or destroyed for ${message.upgradeId}`);
@@ -583,6 +583,37 @@ class TunnelServer {
       new Promise(resolve => this.httpServer.close(resolve)),
       new Promise(resolve => this.wsServer.close(resolve))
     ]);
+  }
+
+  createWebSocketFrame(payload, opcode) {
+    // Create a proper WebSocket frame according to RFC 6455
+    const payloadLength = payload.length;
+    let frame;
+    
+    if (payloadLength < 126) {
+      // Short payload (0-125 bytes)
+      frame = Buffer.allocUnsafe(2 + payloadLength);
+      frame[0] = 0x80 | opcode; // FIN bit set + opcode
+      frame[1] = payloadLength; // Payload length (no mask bit for server->client)
+      payload.copy(frame, 2);
+    } else if (payloadLength < 65536) {
+      // Medium payload (126-65535 bytes)
+      frame = Buffer.allocUnsafe(4 + payloadLength);
+      frame[0] = 0x80 | opcode; // FIN bit set + opcode
+      frame[1] = 126; // Extended payload length indicator
+      frame.writeUInt16BE(payloadLength, 2); // 16-bit payload length
+      payload.copy(frame, 4);
+    } else {
+      // Large payload (65536+ bytes)
+      frame = Buffer.allocUnsafe(10 + payloadLength);
+      frame[0] = 0x80 | opcode; // FIN bit set + opcode
+      frame[1] = 127; // Extended payload length indicator
+      frame.writeUInt32BE(0, 2); // High 32 bits (always 0 for our use case)
+      frame.writeUInt32BE(payloadLength, 6); // Low 32 bits of payload length
+      payload.copy(frame, 10);
+    }
+    
+    return frame;
   }
 }
 

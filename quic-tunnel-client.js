@@ -53,6 +53,7 @@ class QuicTunnelClient extends EventEmitter {
     
     const quicUrl = `ws://${this.config.serverHost}:${this.config.quicPort}`;
     console.log(`🔌 Connecting to QUIC server: ${quicUrl}`);
+    console.log(`🎯 Requested tunnel ID: ${this.tunnelId}`);
     
     try {
       // Create enhanced WebSocket connection with QUIC-like properties
@@ -240,6 +241,10 @@ class QuicTunnelClient extends EventEmitter {
           this.handleConnectionMigration(message);
           break;
         
+        case 'tunnel_registered':
+          this.handleTunnelRegistered(message);
+          break;
+        
         default:
           console.warn(`❓ Unknown QUIC message type: ${message.type}`);
       }
@@ -250,7 +255,6 @@ class QuicTunnelClient extends EventEmitter {
 
   handleConnectionEstablishedMessage(message) {
     this.connectionId = message.connectionId;
-    this.tunnelId = message.tunnelId;
     console.log(`⚡ QUIC connection confirmed: ${this.connectionId}`);
     console.log(`📊 Max concurrent streams: ${message.maxStreams}`);
   }
@@ -392,6 +396,11 @@ class QuicTunnelClient extends EventEmitter {
     console.log('⚡ Server initiated connection migration');
     // Handle server-initiated connection migration
     this.connectionMigration.attempts = 0;
+  }
+
+  handleTunnelRegistered(message) {
+    console.log(`✅ Tunnel registered successfully: ${message.tunnelId} → localhost:${message.localPort}`);
+    this.tunnelId = message.tunnelId; // Confirm the tunnel ID
   }
 
   updateLatencyStats(latency) {

@@ -101,32 +101,18 @@ class QuicTunnelServer extends EventEmitter {
 
   handleQuicConnection(connection, req) {
     const connectionId = this.generateConnectionId();
-    const tunnelId = this.generateTunnelId();
+    let tunnelId = null; // Will be set when client sends tunnel_info
     
-    console.log(`⚡ New QUIC connection: ${connectionId} (tunnel: ${tunnelId})`);
+    console.log(`⚡ New QUIC connection: ${connectionId}`);
     
     // Enhanced connection with QUIC-like properties
     connection.connectionId = connectionId;
-    connection.tunnelId = tunnelId;
+    connection.tunnelId = tunnelId; // Will be set later
     connection.activeStreams = new Map();
     connection.maxStreams = 1000; // QUIC allows many concurrent streams
     connection.lastActivity = Date.now();
     
-    // Store tunnel
-    this.tunnels.set(tunnelId, {
-      connection,
-      localPort: null, // Will be set by client
-      connectedAt: new Date(),
-      requestCount: 0,
-      activeStreams: 0,
-      connectionId,
-      protocol: 'QUIC'
-    });
-
-    this.quicConnections.set(connectionId, {
-      tunnel: tunnelId,
-      streams: connection.activeStreams
-    });
+    // Don't store tunnel yet - wait for tunnel_info message with the correct tunnel ID
 
     // Handle messages (simulating QUIC streams)
     connection.on('message', (data) => {
@@ -135,7 +121,9 @@ class QuicTunnelServer extends EventEmitter {
 
     connection.on('close', () => {
       console.log(`⚡ QUIC connection closed: ${connectionId}`);
-      this.tunnels.delete(tunnelId);
+      if (connection.tunnelId) {
+        this.tunnels.delete(connection.tunnelId);
+      }
       this.quicConnections.delete(connectionId);
     });
 
@@ -143,11 +131,10 @@ class QuicTunnelServer extends EventEmitter {
       console.error(`❌ QUIC connection error: ${connectionId}`, error);
     });
 
-    // Send connection acknowledgment
+    // Send connection acknowledgment (without tunnel ID yet)
     this.sendQuicMessage(connection, {
       type: 'connection_established',
       connectionId,
-      tunnelId,
       maxStreams: connection.maxStreams
     });
   }
@@ -164,7 +151,7 @@ class QuicTunnelServer extends EventEmitter {
 
       switch (message.type) {
         case 'tunnel_info':
-          this.handleTunnelInfo(connection.tunnelId, message);
+          this.handleTunnelInfo(connection, message);
           break;
         
         case 'http_response':
@@ -177,6 +164,11 @@ class QuicTunnelServer extends EventEmitter {
         
         case 'stream_data':
           this.handleStreamData(connection, message);
+          break;
+        
+        case 'connection_stats':
+          // Handle periodic stats from client (just log for now)
+          console.log(`📊 Client stats: ${message.activeStreams} active streams, ${message.latencyStats?.avg?.toFixed(1) || 0}ms avg latency`);
           break;
         
         default:
@@ -292,12 +284,42 @@ class QuicTunnelServer extends EventEmitter {
     }
   }
 
-  handleTunnelInfo(tunnelId, message) {
-    const tunnel = this.tunnels.get(tunnelId);
-    if (tunnel && message.localPort) {
-      tunnel.localPort = message.localPort;
-      console.log(`📋 QUIC tunnel ${tunnelId} local port: ${message.localPort}`);
+  handleTunnelInfo(connection, message) {
+    const tunnelId = message.tunnelId;
+    const localPort = message.localPort;
+    
+    if (!tunnelId) {
+      console.warn('⚠️ No tunnel ID provided in tunnel_info message');
+      return;
     }
+
+    // Set the tunnel ID on the connection
+    connection.tunnelId = tunnelId;
+    
+    // Store or update tunnel
+    this.tunnels.set(tunnelId, {
+      connection,
+      localPort: localPort,
+      connectedAt: new Date(),
+      requestCount: 0,
+      activeStreams: 0,
+      connectionId: connection.connectionId,
+      protocol: 'QUIC'
+    });
+
+    this.quicConnections.set(connection.connectionId, {
+      tunnel: tunnelId,
+      streams: connection.activeStreams
+    });
+    
+    console.log(`📋 QUIC tunnel registered: ${tunnelId} → localhost:${localPort}`);
+    
+    // Send confirmation back to client
+    this.sendQuicMessage(connection, {
+      type: 'tunnel_registered',
+      tunnelId: tunnelId,
+      localPort: localPort
+    });
   }
 
   handleStreamData(connection, message) {

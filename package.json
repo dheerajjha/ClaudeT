@@ -5,7 +5,7 @@
   "main": "quic-tunnel-server.js",
   "scripts": {
     "quic:server": "node quic-tunnel-server.js",
-    "quic:client": "node quic-tunnel-client.js 3008 claude",
+    "quic:client": "node quic-tunnel-client.js",
     "test:performance": "node test-quic-performance.js",
     "test:manual": "node manual-test-comparison.js",
     "start:test": "node start-quic-test.js",

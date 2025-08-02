@@ -306,6 +306,7 @@ class QuicTunnelServer extends EventEmitter {
     
     // Store or update tunnel
     this.tunnels.set(tunnelId, {
+      id: tunnelId,
       connection,
       localPort: localPort,
       connectedAt: new Date(),
@@ -394,8 +395,9 @@ class QuicTunnelServer extends EventEmitter {
       // Find tunnel by subdomain
       const tunnel = this.tunnels.get(subdomain);
       
-      if (!tunnel || !tunnel.connection || tunnel.connection.readyState !== 'open') {
+      if (!tunnel || !tunnel.connection || tunnel.connection.readyState !== 1) {
         console.log(`❌ No tunnel found for WebSocket upgrade: ${host}${request.url}`);
+        console.log(`🔍 Debug: tunnel=${!!tunnel}, connection=${!!tunnel?.connection}, readyState=${tunnel?.connection?.readyState}`);
         socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
         return;

@@ -3,6 +3,10 @@ const http = require('http');
 const https = require('https');
 const { EventEmitter } = require('events');
 const { URL } = require('url');
+const Logger = require('./logger');
+
+// Initialize logging
+const logger = new Logger('QUIC-CLIENT');
 
 class QuicTunnelClient extends EventEmitter {
   constructor(config = {}) {
@@ -725,7 +729,7 @@ async function startClient() {
     setInterval(() => {
       const stats = client.getStats();
       if (stats.isConnected) {
-        console.log(`📊 Active streams: ${stats.activeStreams}, Avg latency: ${stats.latencyStats.avg?.toFixed(1) || 0}ms`);
+        // Active streams stats (latency logging removed)
       }
     }, 30000);
     

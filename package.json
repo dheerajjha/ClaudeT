@@ -1,36 +1,29 @@
 {
-  "name": "http-tunnel",
+  "name": "quic-tunnel",
   "version": "2.0.0",
-  "description": "Simple HTTP tunnel over WebSocket with excellent WebSocket support",
-  "main": "tunnel-server.js",
+  "description": "QUIC/HTTP3 Tunnel with Ultra-Low Latency - localhost testing edition",
+  "main": "quic-tunnel-server.js",
   "scripts": {
-    "server": "node tunnel-server.js",
-    "client": "node tunnel-client.js",
-    "start": "node tunnel-server.js",
     "quic:server": "node quic-tunnel-server.js",
-    "quic:client": "node quic-tunnel-client.js",
-    "test:websockets": "node test-websockets.js",
-    "debug:websockets": "node debug-websockets.js",
-    "test:simple": "node simple-network-test.js",
-    "test:health": "node test-site-health.js",
-    "install-playwright": "npx playwright install chromium",
-    "quic:demo": "echo '⚡ QUIC/HTTP3 Demo:' && echo '1. Server: npm run quic:server' && echo '2. Client: npm run quic:client 3008 myapp' && echo '3. Test: curl https://myapp.grabr.cc/' && echo '🔥 Ultra-low latency tunnel!'"
+    "quic:client": "node quic-tunnel-client.js 3008 claude",
+    "test:performance": "node test-quic-performance.js",
+    "start:test": "node start-quic-test.js",
+    "clean:logs": "rm -rf logs/*.log && mkdir -p logs",
+    "install-playwright": "npx playwright install chromium"
   },
   "keywords": [
+    "quic",
+    "http3",
     "tunnel",
-    "http",
-    "websocket",
-    "proxy",
-    "ngrok",
-    "real-time",
-    "socket.io"
+    "ultra-low-latency",
+    "performance",
+    "localhost"
   ],
-  "author": "HTTP Tunnel",
+  "author": "QUIC Tunnel",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "ws": "^8.14.2",
-    "http-proxy-middleware": "^2.0.6"
+    "ws": "^8.14.2"
   },
   "devDependencies": {
     "playwright": "^1.40.0"

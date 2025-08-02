@@ -1,6 +1,10 @@
 const express = require('express');
 const http = require('http');
 const { EventEmitter } = require('events');
+const Logger = require('./logger');
+
+// Initialize logging
+const logger = new Logger('QUIC-SERVER');
 
 // Note: This is a conceptual implementation as Node.js doesn't have native QUIC support yet
 // Using a hybrid approach with HTTP/3 concepts and WebSocket fallback
@@ -20,7 +24,7 @@ class QuicTunnelServer extends EventEmitter {
     this.quicConnections = new Map(); // connectionId -> { tunnel, streams }
     
     this.app = express();
-    this.httpServer = http.createServer();
+    this.httpServer = http.createServer(this.app);
     
     this.setupRoutes();
     this.setupQuicServer();
@@ -73,6 +77,8 @@ class QuicTunnelServer extends EventEmitter {
 
     // Handle all HTTP requests through tunnels
     this.app.use('*', (req, res) => {
+      // Preserve original URL and path for tunnel forwarding
+      req.originalUrl = req.originalUrl || req.url;
       this.handleHttpRequest(req, res);
     });
   }
@@ -187,19 +193,33 @@ class QuicTunnelServer extends EventEmitter {
   }
 
   async handleHttpRequest(req, res) {
-    // Extract subdomain from Host header
+    // For localhost testing, use the first available tunnel
+    // In production, this would extract subdomain from Host header
     const host = req.headers.host || '';
-    const subdomain = host.split('.')[0];
+    let tunnelId;
     
-    if (!subdomain || subdomain === this.config.domain.split('.')[0]) {
-      return res.status(404).json({ error: 'Tunnel not found' });
+    if (host.includes('localhost')) {
+      // For localhost testing, use the first available tunnel
+      const availableTunnels = Array.from(this.tunnels.keys());
+      tunnelId = availableTunnels[0];
+      console.log(`🏠 Localhost detected, using first tunnel: ${tunnelId}`);
+    } else {
+      // Production logic: extract subdomain
+      tunnelId = host.split('.')[0];
+    }
+    
+    if (!tunnelId) {
+      return res.status(404).json({ 
+        error: 'No tunnel available',
+        available: Array.from(this.tunnels.keys())
+      });
     }
 
-    const tunnel = this.tunnels.get(subdomain);
+    const tunnel = this.tunnels.get(tunnelId);
     if (!tunnel || !tunnel.connection || tunnel.connection.readyState !== 1) {
       return res.status(503).json({ 
         error: 'QUIC tunnel not connected',
-        subdomain,
+        requestedTunnel: tunnelId,
         available: Array.from(this.tunnels.keys())
       });
     }
@@ -207,7 +227,9 @@ class QuicTunnelServer extends EventEmitter {
     const requestId = this.generateRequestId();
     const streamId = this.generateStreamId();
     
-    console.log(`📥 HTTP ${req.method} ${req.url} → ${subdomain} [${requestId}] (QUIC stream: ${streamId})`);
+    // Use originalUrl to preserve the full path
+    const forwardUrl = req.originalUrl || req.url;
+    console.log(`📥 HTTP ${req.method} ${forwardUrl} → ${tunnelId} [${requestId}] (QUIC stream: ${streamId})`);
 
     // Increment counters
     tunnel.requestCount++;
@@ -232,7 +254,7 @@ class QuicTunnelServer extends EventEmitter {
       requestId,
       streamId,
       method: req.method,
-      url: req.url,
+      url: forwardUrl,  // Use the preserved URL
       headers: req.headers,
       body: req.body ? (Buffer.isBuffer(req.body) ? req.body.toString('base64') : req.body) : undefined,
       timestamp: Date.now() // For latency measurement

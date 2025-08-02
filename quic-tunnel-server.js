@@ -20,19 +20,21 @@ class QuicTunnelServer extends EventEmitter {
     this.quicConnections = new Map(); // connectionId -> { tunnel, streams }
     
     this.app = express();
-    this.httpServer = http.createServer(this.app);
+    this.httpServer = http.createServer();
     
     this.setupRoutes();
+    this.setupRawHttpHandler();
     this.setupQuicServer();
   }
 
   setupRoutes() {
     this.app.set('trust proxy', true);
     
-    // Body parsing middleware
+    // Body parsing middleware (more specific to avoid interfering with tunneled responses)
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-    this.app.use(express.raw({ limit: '10mb', type: '*/*' }));
+    // Only use raw parsing for specific endpoints, not all requests
+    this.app.use('/api/*', express.raw({ limit: '10mb', type: '*/*' }));
 
     // Health check endpoint
     this.app.get('/health', (req, res) => {
@@ -72,9 +74,20 @@ class QuicTunnelServer extends EventEmitter {
       });
     });
 
-    // Handle all HTTP requests through tunnels
-    this.app.use('*', (req, res) => {
-      this.handleHttpRequest(req, res);
+    // Note: HTTP requests are now handled by setupRawHttpHandler() to avoid middleware interference
+  }
+
+  setupRawHttpHandler() {
+    // Handle HTTP requests at the raw server level to avoid Express middleware interference
+    this.httpServer.on('request', (req, res) => {
+      // Check if this is a health/dashboard request
+      if (req.url === '/health' || req.url === '/dashboard') {
+        // Use Express for these endpoints
+        this.app(req, res);
+      } else {
+        // Handle tunnel requests directly without Express middleware
+        this.handleHttpRequest(req, res);
+      }
     });
   }
 
@@ -275,23 +288,39 @@ class QuicTunnelServer extends EventEmitter {
 
     // Add original headers (this will override any conflicting headers above)
     if (message.headers) {
+      // Debug: Log what we received for JS files
+      if (requestPath.includes('.js')) {
+        console.log(`📥 Server received headers for ${requestPath}:`);
+        console.log(`📥 Content-Type: ${message.headers['content-type']}`);
+        console.log(`📥 Full headers:`, JSON.stringify(message.headers, null, 2));
+      }
       Object.assign(responseHeaders, message.headers);
     }
 
-    // Use writeHead to send status and headers together (prevents Express from modifying Content-Type)
-    res.writeHead(message.statusCode || 200, responseHeaders);
+    // Build raw HTTP response to ensure no Express interference
+    let httpResponse = `HTTP/1.1 ${message.statusCode || 200} OK\r\n`;
     
-    // Send response body
+    // Add headers
+    for (const [key, value] of Object.entries(responseHeaders)) {
+      httpResponse += `${key}: ${value}\r\n`;
+    }
+    
+    httpResponse += '\r\n'; // End headers
+    
+    // Send raw response to bypass Express completely
     if (message.body) {
       if (message.isBase64) {
         const buffer = Buffer.from(message.body, 'base64');
-        res.end(buffer);
+        res.socket.write(httpResponse);
+        res.socket.write(buffer);
       } else {
-        res.end(message.body);
+        res.socket.write(httpResponse + message.body);
       }
     } else {
-      res.end();
+      res.socket.write(httpResponse);
     }
+    
+    res.socket.end();
   }
 
   handleTunnelInfo(connection, message) {

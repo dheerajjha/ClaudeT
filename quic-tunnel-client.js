@@ -371,11 +371,29 @@ class QuicTunnelClient extends EventEmitter {
       });
 
       // Send request body if present
-      if (body) {
-        if (typeof body === 'string' && body.match(/^[A-Za-z0-9+/=]+$/)) {
-          req.write(Buffer.from(body, 'base64'));
-        } else {
+      if (body !== null && body !== undefined) {
+        if (typeof body === 'string') {
+          if (body.length > 0) {
+            if (body.match(/^[A-Za-z0-9+/=]+$/)) {
+              // Base64 encoded body
+              req.write(Buffer.from(body, 'base64'));
+            } else {
+              // Regular string body
+              req.write(body);
+            }
+          }
+        } else if (Buffer.isBuffer(body)) {
+          // Buffer body
           req.write(body);
+        } else if (typeof body === 'object') {
+          // Check if it's a non-empty object
+          if (Object.keys(body).length > 0) {
+            // JSON object body
+            req.write(JSON.stringify(body));
+          }
+        } else {
+          // Convert to string
+          req.write(String(body));
         }
       }
 

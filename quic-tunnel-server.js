@@ -23,7 +23,6 @@ class QuicTunnelServer extends EventEmitter {
     this.httpServer = http.createServer();
     
     this.setupRoutes();
-    this.setupRawHttpHandler();
     this.setupQuicServer();
   }
 
@@ -74,20 +73,9 @@ class QuicTunnelServer extends EventEmitter {
       });
     });
 
-    // Note: HTTP requests are now handled by setupRawHttpHandler() to avoid middleware interference
-  }
-
-  setupRawHttpHandler() {
-    // Handle HTTP requests at the raw server level to avoid Express middleware interference
-    this.httpServer.on('request', (req, res) => {
-      // Check if this is a health/dashboard request
-      if (req.url === '/health' || req.url === '/dashboard') {
-        // Use Express for these endpoints
-        this.app(req, res);
-      } else {
-        // Handle tunnel requests directly without Express middleware
-        this.handleHttpRequest(req, res);
-      }
+    // Handle all HTTP requests through tunnels
+    this.app.use('*', (req, res) => {
+      this.handleHttpRequest(req, res);
     });
   }
 
@@ -202,7 +190,7 @@ class QuicTunnelServer extends EventEmitter {
 
   async handleHttpRequest(req, res) {
     // Extract subdomain from Host header
-    const host = req.get('host') || '';
+    const host = req.headers.host || '';
     const subdomain = host.split('.')[0];
     
     if (!subdomain || subdomain === this.config.domain.split('.')[0]) {
@@ -279,48 +267,32 @@ class QuicTunnelServer extends EventEmitter {
 
     if (res.headersSent) return;
 
-    // Prepare headers object
-    const responseHeaders = {
-      'X-Tunnel-Protocol': 'QUIC',
-      'X-Tunnel-Latency': `${latency}ms`,
-      'X-Tunnel-Stream-ID': streamId
-    };
 
-    // Add original headers (this will override any conflicting headers above)
+
+    // Set response headers
     if (message.headers) {
-      // Debug: Log what we received for JS files
-      if (requestPath.includes('.js')) {
-        console.log(`📥 Server received headers for ${requestPath}:`);
-        console.log(`📥 Content-Type: ${message.headers['content-type']}`);
-        console.log(`📥 Full headers:`, JSON.stringify(message.headers, null, 2));
-      }
-      Object.assign(responseHeaders, message.headers);
+      Object.entries(message.headers).forEach(([key, value]) => {
+        res.setHeader(key, value);
+      });
     }
 
-    // Build raw HTTP response to ensure no Express interference
-    let httpResponse = `HTTP/1.1 ${message.statusCode || 200} OK\r\n`;
+    // Add QUIC performance headers
+    res.setHeader('X-Tunnel-Protocol', 'QUIC');
+    res.setHeader('X-Tunnel-Latency', `${latency}ms`);
+    res.setHeader('X-Tunnel-Stream-ID', streamId);
+
+    // Send response
+    res.status(message.statusCode || 200);
     
-    // Add headers
-    for (const [key, value] of Object.entries(responseHeaders)) {
-      httpResponse += `${key}: ${value}\r\n`;
-    }
-    
-    httpResponse += '\r\n'; // End headers
-    
-    // Send raw response to bypass Express completely
     if (message.body) {
       if (message.isBase64) {
-        const buffer = Buffer.from(message.body, 'base64');
-        res.socket.write(httpResponse);
-        res.socket.write(buffer);
+        res.send(Buffer.from(message.body, 'base64'));
       } else {
-        res.socket.write(httpResponse + message.body);
+        res.send(message.body);
       }
     } else {
-      res.socket.write(httpResponse);
+      res.end();
     }
-    
-    res.socket.end();
   }
 
   handleTunnelInfo(connection, message) {

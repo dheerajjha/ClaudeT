@@ -156,9 +156,18 @@ class QuicTunnelServer extends EventEmitter {
         case 'http_response':
           this.handleHttpResponse(message);
           break;
+
+        case 'websocket_upgrade_response':
+          console.log(`🔌 Received WebSocket upgrade response for ${message.upgradeId}`);
+          this.handleWebSocketUpgradeResponse(message);
+          break;
         
         case 'websocket_frame':
-          this.handleWebSocketFrame(connection.tunnelId, message);
+          this.handleWebSocketFrame(message);
+          break;
+
+        case 'websocket_close':
+          this.handleWebSocketClose(message);
           break;
         
         case 'stream_data':
@@ -375,7 +384,239 @@ class QuicTunnelServer extends EventEmitter {
     return `stream_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   }
 
+  handleWebSocketUpgrade(request, socket, head) {
+    try {
+      const host = request.headers.host || '';
+      const subdomain = host.split('.')[0];
+      
+      console.log(`🔄 WebSocket upgrade: ${host}${request.url} → checking tunnel ${subdomain}`);
+      
+      // Find tunnel by subdomain
+      const tunnel = this.tunnels.get(subdomain);
+      
+      if (!tunnel || !tunnel.connection || tunnel.connection.readyState !== 'open') {
+        console.log(`❌ No tunnel found for WebSocket upgrade: ${host}${request.url}`);
+        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      console.log(`🌐 WSS: ${host}${request.url} → tunnel ${subdomain}`);
+      this.forwardWebSocketUpgrade(tunnel, request, socket, head);
+      
+    } catch (error) {
+      console.error('❌ WebSocket upgrade error:', error);
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+      socket.destroy();
+    }
+  }
+
+  forwardWebSocketUpgrade(tunnel, request, socket, head) {
+    const upgradeId = `${tunnel.id || 'unknown'}_ws_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    
+    console.log(`🔌 Creating WebSocket bridge: ${upgradeId}`);
+    
+    // Store the socket for this WebSocket connection
+    this.pendingRequests.set(upgradeId, { socket, head });
+    
+    // Forward WebSocket upgrade request to client via QUIC
+    const upgradeData = {
+      type: 'websocket_upgrade',
+      upgradeId,
+      method: request.method,
+      url: request.url,
+      headers: request.headers
+    };
+
+    this.sendQuicMessage(tunnel.connection, upgradeData);
+    
+    // Timeout for upgrade response
+    setTimeout(() => {
+      if (this.pendingRequests.has(upgradeId)) {
+        console.log(`⏰ WebSocket upgrade timeout: ${upgradeId}`);
+        this.pendingRequests.delete(upgradeId);
+        socket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
+        socket.destroy();
+      }
+    }, 10000);
+  }
+
+  handleWebSocketUpgradeResponse(message) {
+    console.log(`🔄 Processing WebSocket upgrade response: ${message.upgradeId}, success: ${message.success}`);
+    
+    const pending = this.pendingRequests.get(message.upgradeId);
+    if (!pending) {
+      console.warn(`⚠️ No pending WebSocket upgrade found for ${message.upgradeId}`);
+      return;
+    }
+
+    this.pendingRequests.delete(message.upgradeId);
+    const { socket, head } = pending;
+
+    if (message.success) {
+      try {
+        // Ensure we have a valid accept key
+        if (!message.webSocketAccept) {
+          console.error(`❌ Missing WebSocket accept key for ${message.upgradeId}`);
+          socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Send proper HTTP 101 upgrade response
+        const responseHeaders = [
+          'HTTP/1.1 101 Switching Protocols',
+          'Upgrade: websocket',
+          'Connection: Upgrade',
+          `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
+          '', ''
+        ].join('\r\n');
+
+        console.log(`✅ Sending WebSocket upgrade response: ${message.upgradeId}`);
+        
+        if (!socket.writable) {
+          console.error(`❌ Socket not writable for ${message.upgradeId}`);
+          socket.destroy();
+          return;
+        }
+        
+        socket.write(responseHeaders);
+        console.log(`✅ WebSocket upgrade headers sent: ${message.upgradeId}`);
+        
+        // Now set up raw WebSocket frame proxying
+        this.setupWebSocketProxy(socket, message.upgradeId);
+        
+      } catch (error) {
+        console.error(`❌ Error setting up WebSocket tunnel: ${message.upgradeId}`, error);
+        try {
+          socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+          socket.destroy();
+        } catch (destroyError) {
+          console.error(`❌ Error destroying socket: ${destroyError}`);
+        }
+      }
+      
+    } else {
+      console.log(`❌ WebSocket upgrade failed: ${message.upgradeId} - ${message.error}`);
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      socket.destroy();
+    }
+  }
+
+  setupWebSocketProxy(browserSocket, upgradeId) {
+    console.log(`🔌 Setting up transparent WebSocket proxy for ${upgradeId}`);
+    
+    // Store WebSocket connection for bidirectional communication
+    browserSocket.on('data', (data) => {
+      // Forward ALL WebSocket frames from browser to client (completely agnostic)
+      const tunnel = Array.from(this.tunnels.values())
+        .find(t => t.connection && t.connection.readyState === 'open');
+      
+      if (tunnel) {
+        try {
+          console.log(`📤 Raw frame from browser: ${data.length} bytes`);
+          
+          // Use binary-safe base64 encoding for ALL frame data
+          const frameData = data.toString('base64');
+          console.log(`📤 Forwarding frame to client: ${data.length} bytes`);
+          
+          // Send frame message to tunnel client
+          const frameMessage = {
+            type: 'websocket_frame',
+            upgradeId,
+            data: frameData,
+            direction: 'to_local',
+            originalSize: data.length
+          };
+          
+          this.sendQuicMessage(tunnel.connection, frameMessage);
+        } catch (error) {
+          console.error(`❌ Error encoding frame data: ${upgradeId}`, error);
+        }
+      }
+    });
+
+    browserSocket.on('close', () => {
+      console.log(`🔌 Browser WebSocket closed: ${upgradeId}`);
+      const tunnel = Array.from(this.tunnels.values())
+        .find(t => t.connection && t.connection.readyState === 'open');
+      
+      if (tunnel) {
+        this.sendQuicMessage(tunnel.connection, {
+          type: 'websocket_close',
+          upgradeId
+        });
+      }
+    });
+
+    browserSocket.on('error', (error) => {
+      console.error(`❌ Browser WebSocket error: ${upgradeId}`, error);
+    });
+
+    // Store reference for frames from client
+    this.pendingRequests.set(`ws_${upgradeId}`, { 
+      socket: browserSocket
+    });
+  }
+
+  handleWebSocketFrame(message) {
+    const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
+    if (pending && pending.socket) {
+      try {
+        // Validate base64 data before decoding
+        if (!message.data || typeof message.data !== 'string') {
+          console.warn(`⚠️ Invalid frame data for ${message.upgradeId}: data is not a string`);
+          return;
+        }
+        
+        // Forward frame from client to browser
+        const data = Buffer.from(message.data, 'base64');
+        
+        // Validate decoded data
+        if (!data || data.length === 0) {
+          console.warn(`⚠️ Empty frame data after decoding for ${message.upgradeId}`);
+          return;
+        }
+        
+        console.log(`📥 Raw frame to browser: ${data.length} bytes`);
+        console.log(`📥 Forwarding frame to browser: ${message.originalSize || data.length} bytes from base64`);
+        
+        if (pending.socket.writable && !pending.socket.destroyed) {
+          pending.socket.write(data);
+          console.log(`✅ WebSocket frame sent to browser: ${data.length} bytes`);
+        } else {
+          console.warn(`⚠️ Socket not writable or destroyed for ${message.upgradeId}`);
+          this.pendingRequests.delete(`ws_${message.upgradeId}`);
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error handling WebSocket frame: ${message.upgradeId}`, error);
+        console.error(`❌ Frame data preview: ${message.data ? message.data.substring(0, 50) : 'null'}...`);
+      }
+    } else {
+      console.warn(`⚠️ No pending WebSocket connection found for frame: ${message.upgradeId}`);
+    }
+  }
+
+  handleWebSocketClose(message) {
+    const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
+    if (pending && pending.socket) {
+      console.log(`🔌 Closing WebSocket connection: ${message.upgradeId}`);
+      try {
+        pending.socket.destroy();
+      } catch (error) {
+        console.error(`❌ Error closing WebSocket: ${message.upgradeId}`, error);
+      }
+      this.pendingRequests.delete(`ws_${message.upgradeId}`);
+    }
+  }
+
   start() {
+    // Add WebSocket upgrade handling to HTTP server
+    this.httpServer.on('upgrade', (request, socket, head) => {
+      this.handleWebSocketUpgrade(request, socket, head);
+    });
+
     this.httpServer.listen(this.config.httpPort, () => {
       console.log('🚀 QUIC/HTTP3 Tunnel Server Started!');
       console.log(`📡 HTTP Server: http://localhost:${this.config.httpPort}`);

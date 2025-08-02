@@ -232,6 +232,10 @@ class QuicTunnelClient extends EventEmitter {
         case 'websocket_frame':
           this.handleWebSocketFrame(message);
           break;
+
+        case 'websocket_close':
+          this.handleWebSocketClose(message);
+          break;
         
         case 'stream_reset':
           this.handleStreamReset(message);
@@ -419,6 +423,158 @@ class QuicTunnelClient extends EventEmitter {
   handleTunnelRegistered(message) {
     console.log(`✅ Tunnel registered successfully: ${message.tunnelId} → localhost:${message.localPort}`);
     this.tunnelId = message.tunnelId; // Confirm the tunnel ID
+  }
+
+  async handleWebSocketUpgrade(message) {
+    console.log(`🔌 Handling WebSocket upgrade: ${message.url}`);
+    
+    try {
+      const WebSocket = require('ws');
+      const crypto = require('crypto');
+      
+      // Create WebSocket connection to local server
+      const localUrl = `ws://${this.config.localHost}:${this.config.localPort}${message.url}`;
+      const localWs = new WebSocket(localUrl, {
+        headers: this.filterHeaders(message.headers)
+      });
+
+      // Store WebSocket connection
+      this.localWebSockets = this.localWebSockets || new Map();
+      this.localWebSockets.set(message.upgradeId, localWs);
+
+      localWs.on('open', () => {
+        console.log(`✅ Local WebSocket connected: ${localUrl}`);
+        
+        // Generate WebSocket accept key
+        const key = message.headers['sec-websocket-key'];
+        console.log(`🔑 WebSocket key: ${key}`);
+        
+        const acceptKey = crypto
+          .createHash('sha1')
+          .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+          .digest('base64');
+        
+        console.log(`🔑 Generated accept key: ${acceptKey}`);
+
+        // Send success response to server
+        this.sendQuicMessage({
+          type: 'websocket_upgrade_response',
+          upgradeId: message.upgradeId,
+          success: true,
+          webSocketAccept: acceptKey
+        });
+        
+        console.log(`📤 Sent WebSocket upgrade response for ${message.upgradeId}`);
+      });
+
+      localWs.on('message', (data, isBinary) => {
+        // Forward ALL messages from local WebSocket to server (completely agnostic)
+        // Handle both binary and text frames properly
+        let frameData;
+        let originalSize;
+        
+        if (Buffer.isBuffer(data)) {
+          // Binary frame
+          frameData = data.toString('base64');
+          originalSize = data.length;
+          console.log(`📤 Forwarding binary frame to server: ${originalSize} bytes`);
+        } else {
+          // Text frame - convert to buffer first for consistent handling
+          const buffer = Buffer.from(data);
+          frameData = buffer.toString('base64');
+          originalSize = buffer.length;
+          console.log(`📤 Forwarding text frame to server: ${originalSize} bytes`);
+        }
+        
+        this.sendQuicMessage({
+          type: 'websocket_frame',
+          upgradeId: message.upgradeId,
+          data: frameData,
+          direction: 'to_browser',
+          originalSize: originalSize,
+          isBinary: isBinary
+        });
+      });
+
+      localWs.on('close', () => {
+        console.log(`🔌 Local WebSocket closed: ${message.upgradeId}`);
+        this.localWebSockets.delete(message.upgradeId);
+      });
+
+      localWs.on('error', (error) => {
+        console.error(`❌ Local WebSocket error: ${message.upgradeId}`, error);
+        
+        // Send failure response to server
+        this.sendQuicMessage({
+          type: 'websocket_upgrade_response',
+          upgradeId: message.upgradeId,
+          success: false,
+          error: error.message
+        });
+        
+        this.localWebSockets.delete(message.upgradeId);
+      });
+
+    } catch (error) {
+      console.error(`❌ WebSocket upgrade failed: ${message.upgradeId}`, error);
+      
+      // Send failure response to server
+      this.sendQuicMessage({
+        type: 'websocket_upgrade_response',
+        upgradeId: message.upgradeId,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  handleWebSocketFrame(message) {
+    const localWs = this.localWebSockets?.get(message.upgradeId);
+    if (localWs && localWs.readyState === 1) {
+      try {
+        // Forward frame from server to local WebSocket (completely agnostic)
+        const data = Buffer.from(message.data, 'base64');
+        console.log(`📥 Forwarding frame to local WebSocket: ${message.originalSize || data.length} bytes`);
+        
+        // Send with proper binary flag
+        const isBinary = message.isBinary !== undefined ? message.isBinary : Buffer.isBuffer(data);
+        localWs.send(data, { binary: isBinary });
+      } catch (error) {
+        console.error(`❌ Error handling WebSocket frame: ${message.upgradeId}`, error);
+      }
+    } else {
+      console.warn(`⚠️ No local WebSocket connection found for frame: ${message.upgradeId}`);
+    }
+  }
+
+  handleWebSocketClose(message) {
+    const localWs = this.localWebSockets?.get(message.upgradeId);
+    if (localWs) {
+      console.log(`🔌 Closing local WebSocket: ${message.upgradeId}`);
+      localWs.close();
+      this.localWebSockets.delete(message.upgradeId);
+    }
+  }
+
+  filterHeaders(headers) {
+    // Filter headers for WebSocket upgrade
+    const filtered = {};
+    const allowedHeaders = [
+      'sec-websocket-key',
+      'sec-websocket-version', 
+      'sec-websocket-protocol',
+      'sec-websocket-extensions',
+      'origin',
+      'user-agent'
+    ];
+    
+    for (const [key, value] of Object.entries(headers)) {
+      if (allowedHeaders.includes(key.toLowerCase())) {
+        filtered[key] = value;
+      }
+    }
+    
+    return filtered;
   }
 
   updateLatencyStats(latency) {

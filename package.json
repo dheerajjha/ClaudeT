@@ -12,6 +12,7 @@
     "test:websockets": "node test-websockets.js",
     "debug:websockets": "node debug-websockets.js",
     "test:simple": "node simple-network-test.js",
+    "test:health": "node test-site-health.js",
     "install-playwright": "npx playwright install chromium",
     "quic:demo": "echo '⚡ QUIC/HTTP3 Demo:' && echo '1. Server: npm run quic:server' && echo '2. Client: npm run quic:client 3008 myapp' && echo '3. Test: curl https://myapp.grabr.cc/' && echo '🔥 Ultra-low latency tunnel!'"
   },

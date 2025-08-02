@@ -7,10 +7,13 @@
     "server": "node tunnel-server.js",
     "client": "node tunnel-client.js",
     "start": "node tunnel-server.js",
+    "quic:server": "node quic-tunnel-server.js",
+    "quic:client": "node quic-tunnel-client.js",
     "test:websockets": "node test-websockets.js",
     "debug:websockets": "node debug-websockets.js",
     "test:simple": "node simple-network-test.js",
-    "install-playwright": "npx playwright install chromium"
+    "install-playwright": "npx playwright install chromium",
+    "quic:demo": "echo '⚡ QUIC/HTTP3 Demo:' && echo '1. Server: npm run quic:server' && echo '2. Client: npm run quic:client 3008 myapp' && echo '3. Test: curl https://myapp.grabr.cc/' && echo '🔥 Ultra-low latency tunnel!'"
   },
   "keywords": [
     "tunnel",

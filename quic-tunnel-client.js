@@ -358,12 +358,7 @@ class QuicTunnelClient extends EventEmitter {
 
 
 
-          // Debug: Log exactly what we're sending for JS files
-          if (url.includes('.js')) {
-            console.log(`📤 Client sending headers for ${url}:`);
-            console.log(`📤 Content-Type: ${res.headers['content-type']}`);
-            console.log(`📤 Full headers:`, JSON.stringify(res.headers, null, 2));
-          }
+
 
           resolve({
             statusCode: res.statusCode,

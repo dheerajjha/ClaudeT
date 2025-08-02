@@ -266,22 +266,22 @@ class QuicTunnelServer extends EventEmitter {
 
     if (res.headersSent) return;
 
-    // Add QUIC performance headers first
-    res.setHeader('X-Tunnel-Protocol', 'QUIC');
-    res.setHeader('X-Tunnel-Latency', `${latency}ms`);
-    res.setHeader('X-Tunnel-Stream-ID', streamId);
+    // Prepare headers object
+    const responseHeaders = {
+      'X-Tunnel-Protocol': 'QUIC',
+      'X-Tunnel-Latency': `${latency}ms`,
+      'X-Tunnel-Stream-ID': streamId
+    };
 
-    // Set response headers (this will override any conflicting headers set above)
+    // Add original headers (this will override any conflicting headers above)
     if (message.headers) {
-      Object.entries(message.headers).forEach(([key, value]) => {
-        res.setHeader(key, value);
-      });
+      Object.assign(responseHeaders, message.headers);
     }
 
-    // Set status code
-    res.status(message.statusCode || 200);
+    // Use writeHead to send status and headers together (prevents Express from modifying Content-Type)
+    res.writeHead(message.statusCode || 200, responseHeaders);
     
-    // Send response body while preserving Content-Type
+    // Send response body
     if (message.body) {
       if (message.isBase64) {
         const buffer = Buffer.from(message.body, 'base64');

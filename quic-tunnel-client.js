@@ -435,6 +435,11 @@ class QuicTunnelClient extends EventEmitter {
 
   async handleWebSocketUpgrade(message) {
     console.log(`🔌 Handling WebSocket upgrade: ${message.url}`);
+    console.log(`🎯 MESSAGE DETAILS:`, {
+      url: message.url,
+      upgradeId: message.upgradeId,
+      headers: Object.keys(message.headers || {})
+    });
     
     try {
       const WebSocket = require('ws');
@@ -442,9 +447,13 @@ class QuicTunnelClient extends EventEmitter {
       
       // Create WebSocket connection to local server
       const localUrl = `ws://${this.config.localHost}:${this.config.localPort}${message.url}`;
+      console.log(`🎯 CONNECTING TO LOCAL URL: ${localUrl}`);
+      
       const localWs = new WebSocket(localUrl, {
         headers: this.filterHeaders(message.headers)
       });
+      
+      console.log(`🎯 LOCAL WEBSOCKET CREATED: readyState=${localWs.readyState}`);
 
       // Store WebSocket connection
       this.localWebSockets = this.localWebSockets || new Map();
@@ -452,6 +461,8 @@ class QuicTunnelClient extends EventEmitter {
 
       localWs.on('open', () => {
         console.log(`✅ Local WebSocket connected: ${localUrl}`);
+        console.log(`🎯 WebSocket readyState: ${localWs.readyState}`);
+        console.log(`🎯 WebSocket protocol: ${localWs.protocol}`);
         
         // Generate WebSocket accept key
         const key = message.headers['sec-websocket-key'];
@@ -481,6 +492,9 @@ class QuicTunnelClient extends EventEmitter {
         let frameData;
         let originalSize;
         
+        console.log(`🎯 LOCAL WS MESSAGE RECEIVED: ${data.length} bytes, isBinary: ${isBinary}`);
+        console.log(`🎯 Message preview: ${data.toString().substring(0, 100)}...`);
+        
         if (Buffer.isBuffer(data)) {
           // Binary frame
           frameData = data.toString('base64');
@@ -493,6 +507,8 @@ class QuicTunnelClient extends EventEmitter {
           originalSize = buffer.length;
           console.log(`📤 Forwarding text frame to server: ${originalSize} bytes`);
         }
+        
+        console.log(`🚀 SENDING WEBSOCKET FRAME TO SERVER: direction=to_browser, upgradeId=${message.upgradeId}`);
         
         this.sendQuicMessage({
           type: 'websocket_frame',
@@ -511,6 +527,11 @@ class QuicTunnelClient extends EventEmitter {
 
       localWs.on('error', (error) => {
         console.error(`❌ Local WebSocket error: ${message.upgradeId}`, error);
+        console.error(`❌ Error details:`, {
+          code: error.code,
+          message: error.message,
+          url: localUrl
+        });
         
         // Send failure response to server
         this.sendQuicMessage({

@@ -249,13 +249,20 @@ class QuicTunnelServer extends EventEmitter {
     this.pendingRequests.set(requestId, { res, timeout, streamId });
 
     // Send request through QUIC connection with stream multiplexing
+    // Add original host information for the backend to use
+    const enhancedHeaders = {
+      ...req.headers,
+      'x-original-host': req.headers.host,  // Preserve the original host for the backend
+      'x-tunnel-protocol': 'QUIC'           // Mark as tunneled request
+    };
+    
     const success = this.sendQuicMessage(tunnel.connection, {
       type: 'http_request',
       requestId,
       streamId,
       method: req.method,
       url: forwardUrl,  // Use the preserved URL
-      headers: req.headers,
+      headers: enhancedHeaders,
       body: req.body ? (Buffer.isBuffer(req.body) ? req.body.toString('base64') : req.body) : undefined,
       timestamp: Date.now() // For latency measurement
     });
@@ -530,20 +537,32 @@ class QuicTunnelServer extends EventEmitter {
 
   setupWebSocketProxy(browserSocket, upgradeId) {
     console.log(`🔌 Setting up transparent WebSocket proxy for ${upgradeId}`);
+    console.log(`🎯 Browser socket state: readable=${browserSocket.readable}, writable=${browserSocket.writable}, destroyed=${browserSocket.destroyed}`);
     
     // Store WebSocket connection for bidirectional communication
     browserSocket.on('data', (data) => {
+      console.log(`🎯 BROWSER SOCKET DATA EVENT FIRED! ${data.length} bytes`);
       // Forward ALL WebSocket frames from browser to client (completely agnostic)
       const tunnel = Array.from(this.tunnels.values())
-        .find(t => t.connection && t.connection.readyState === 'open');
+        .find(t => t.connection && t.connection.readyState === 1);
       
       if (tunnel) {
+        console.log(`✅ Found tunnel for forwarding: ${tunnel.id || 'unknown'}, readyState: ${tunnel.connection.readyState}`);
         try {
           console.log(`📤 Raw frame from browser: ${data.length} bytes`);
           
-          // Use binary-safe base64 encoding for ALL frame data
-          const frameData = data.toString('base64');
-          console.log(`📤 Forwarding frame to client: ${data.length} bytes`);
+          // Parse WebSocket frame to extract clean payload
+          const payload = this.parseWebSocketFrame(data);
+          if (!payload) {
+            console.warn(`⚠️ Failed to parse WebSocket frame: ${data.length} bytes`);
+            return;
+          }
+          
+          console.log(`📤 Extracted payload: ${payload.length} bytes (was ${data.length} with frame headers)`);
+          
+          // Use binary-safe base64 encoding for payload data only
+          const frameData = payload.toString('base64');
+          console.log(`📤 Forwarding clean payload to client: ${payload.length} bytes`);
           
           // Send frame message to tunnel client
           const frameMessage = {
@@ -558,13 +577,21 @@ class QuicTunnelServer extends EventEmitter {
         } catch (error) {
           console.error(`❌ Error encoding frame data: ${upgradeId}`, error);
         }
+      } else {
+        console.warn(`⚠️ No active tunnel found for forwarding frame (${data.length} bytes)`);
+        const tunnelStates = Array.from(this.tunnels.values()).map(t => ({
+          id: t.id,
+          hasConnection: !!t.connection,
+          readyState: t.connection?.readyState
+        }));
+        console.warn(`⚠️ Available tunnels:`, tunnelStates);
       }
     });
 
     browserSocket.on('close', () => {
       console.log(`🔌 Browser WebSocket closed: ${upgradeId}`);
       const tunnel = Array.from(this.tunnels.values())
-        .find(t => t.connection && t.connection.readyState === 'open');
+        .find(t => t.connection && t.connection.readyState === 1);
       
       if (tunnel) {
         this.sendQuicMessage(tunnel.connection, {
@@ -578,6 +605,17 @@ class QuicTunnelServer extends EventEmitter {
       console.error(`❌ Browser WebSocket error: ${upgradeId}`, error);
     });
 
+    // Debug: Add other event listeners to see what's happening
+    browserSocket.on('end', () => {
+      console.log(`🎯 Browser socket END event: ${upgradeId}`);
+    });
+    
+    browserSocket.on('drain', () => {
+      console.log(`🎯 Browser socket DRAIN event: ${upgradeId}`);
+    });
+    
+    console.log(`🎯 Event listeners added for ${upgradeId}`);
+
     // Store reference for frames from client
     this.pendingRequests.set(`ws_${upgradeId}`, { 
       socket: browserSocket
@@ -585,6 +623,16 @@ class QuicTunnelServer extends EventEmitter {
   }
 
   handleWebSocketFrame(message) {
+    console.log(`🎯 RECEIVED WEBSOCKET FRAME: direction=${message.direction}, upgradeId=${message.upgradeId}, size=${message.originalSize}`);
+    
+    // Only forward frames that are intended for the browser (from local WebSocket)
+    if (message.direction !== 'to_browser') {
+      console.log(`📋 Skipping frame with direction: ${message.direction} for ${message.upgradeId}`);
+      return;
+    }
+    
+    console.log(`✅ FORWARDING FRAME TO BROWSER: ${message.upgradeId}, size=${message.originalSize}`);
+    
     const pending = this.pendingRequests.get(`ws_${message.upgradeId}`);
     if (pending && pending.socket) {
       try {
@@ -603,12 +651,15 @@ class QuicTunnelServer extends EventEmitter {
           return;
         }
         
-        console.log(`📥 Raw frame to browser: ${data.length} bytes`);
-        console.log(`📥 Forwarding frame to browser: ${message.originalSize || data.length} bytes from base64`);
+        console.log(`📥 Raw payload from client: ${data.length} bytes`);
+        
+        // Create proper WebSocket frame for browser
+        const webSocketFrame = this.createWebSocketFrame(data);
+        console.log(`📥 Created WebSocket frame: ${webSocketFrame.length} bytes (payload: ${data.length})`);
         
         if (pending.socket.writable && !pending.socket.destroyed) {
-          pending.socket.write(data);
-          console.log(`✅ WebSocket frame sent to browser: ${data.length} bytes`);
+          pending.socket.write(webSocketFrame);
+          console.log(`✅ WebSocket frame sent to browser: ${webSocketFrame.length} bytes`);
         } else {
           console.warn(`⚠️ Socket not writable or destroyed for ${message.upgradeId}`);
           this.pendingRequests.delete(`ws_${message.upgradeId}`);
@@ -634,6 +685,96 @@ class QuicTunnelServer extends EventEmitter {
       }
       this.pendingRequests.delete(`ws_${message.upgradeId}`);
     }
+  }
+
+  parseWebSocketFrame(buffer) {
+    try {
+      if (buffer.length < 2) return null;
+      
+      let offset = 0;
+      
+      // First byte: FIN (1 bit) + RSV (3 bits) + Opcode (4 bits)
+      const firstByte = buffer[offset++];
+      const fin = (firstByte & 0x80) === 0x80;
+      const opcode = firstByte & 0x0F;
+      
+      // Second byte: MASK (1 bit) + Payload Length (7 bits)
+      const secondByte = buffer[offset++];
+      const masked = (secondByte & 0x80) === 0x80;
+      let payloadLength = secondByte & 0x7F;
+      
+      // Extended payload length
+      if (payloadLength === 126) {
+        if (buffer.length < offset + 2) return null;
+        payloadLength = buffer.readUInt16BE(offset);
+        offset += 2;
+      } else if (payloadLength === 127) {
+        if (buffer.length < offset + 8) return null;
+        // For simplicity, we'll reject very large frames
+        const high = buffer.readUInt32BE(offset);
+        const low = buffer.readUInt32BE(offset + 4);
+        if (high !== 0) return null; // Too large
+        payloadLength = low;
+        offset += 8;
+      }
+      
+      // Masking key (4 bytes if masked)
+      let maskingKey = null;
+      if (masked) {
+        if (buffer.length < offset + 4) return null;
+        maskingKey = buffer.slice(offset, offset + 4);
+        offset += 4;
+      }
+      
+      // Payload data
+      if (buffer.length < offset + payloadLength) return null;
+      let payload = buffer.slice(offset, offset + payloadLength);
+      
+      // Unmask payload if masked
+      if (masked && maskingKey) {
+        for (let i = 0; i < payload.length; i++) {
+          payload[i] ^= maskingKey[i % 4];
+        }
+      }
+      
+      console.log(`🎯 Parsed WebSocket frame: fin=${fin}, opcode=${opcode}, masked=${masked}, length=${payloadLength}`);
+      return payload;
+      
+    } catch (error) {
+      console.error(`❌ Error parsing WebSocket frame:`, error);
+      return null;
+    }
+  }
+
+  createWebSocketFrame(payload) {
+    // Create WebSocket text frame (opcode 1) for server-to-client (no masking required)
+    const payloadLength = payload.length;
+    let frame;
+    
+    if (payloadLength < 126) {
+      // Small payload: 2 bytes header + payload
+      frame = Buffer.allocUnsafe(2 + payloadLength);
+      frame[0] = 0x81; // FIN=1, opcode=1 (text)
+      frame[1] = payloadLength; // No mask, payload length
+      payload.copy(frame, 2);
+    } else if (payloadLength < 65536) {
+      // Medium payload: 4 bytes header + payload
+      frame = Buffer.allocUnsafe(4 + payloadLength);
+      frame[0] = 0x81; // FIN=1, opcode=1 (text)
+      frame[1] = 126; // Extended length indicator
+      frame.writeUInt16BE(payloadLength, 2);
+      payload.copy(frame, 4);
+    } else {
+      // Large payload: 10 bytes header + payload
+      frame = Buffer.allocUnsafe(10 + payloadLength);
+      frame[0] = 0x81; // FIN=1, opcode=1 (text)
+      frame[1] = 127; // Extended length indicator
+      frame.writeUInt32BE(0, 2); // High 32 bits of length (0 for payloads < 4GB)
+      frame.writeUInt32BE(payloadLength, 6); // Low 32 bits of length
+      payload.copy(frame, 10);
+    }
+    
+    return frame;
   }
 
   start() {

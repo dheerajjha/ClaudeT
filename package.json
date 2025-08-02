@@ -7,6 +7,7 @@
     "quic:server": "node quic-tunnel-server.js",
     "quic:client": "node quic-tunnel-client.js 3008 claude",
     "test:performance": "node test-quic-performance.js",
+    "test:manual": "node manual-test-comparison.js",
     "start:test": "node start-quic-test.js",
     "clean:logs": "rm -rf logs/*.log && mkdir -p logs",
     "install-playwright": "npx playwright install chromium"

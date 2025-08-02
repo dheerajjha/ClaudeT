@@ -384,13 +384,13 @@ class TunnelServer {
         }
         
         // Send proper HTTP 101 upgrade response
-        const responseHeaders = [
-          'HTTP/1.1 101 Switching Protocols',
-          'Upgrade: websocket',
-          'Connection: Upgrade',
-          `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
-          '', ''
-        ].join('\r\n');
+      const responseHeaders = [
+        'HTTP/1.1 101 Switching Protocols',
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        `Sec-WebSocket-Accept: ${message.webSocketAccept}`,
+        '', ''
+      ].join('\r\n');
 
         console.log(`✅ Sending WebSocket upgrade response: ${message.upgradeId}`);
         console.log(`📋 Accept key: ${message.webSocketAccept}`);
@@ -401,12 +401,12 @@ class TunnelServer {
           socket.destroy();
           return;
         }
-        
-        socket.write(responseHeaders);
+
+      socket.write(responseHeaders);
         console.log(`✅ WebSocket upgrade headers sent: ${message.upgradeId}`);
-        
+      
         // Now set up raw WebSocket frame proxying
-        this.setupWebSocketProxy(socket, message.upgradeId);
+      this.setupWebSocketProxy(socket, message.upgradeId);
         
       } catch (error) {
         console.error(`❌ Error setting up WebSocket tunnel: ${message.upgradeId}`, error);
@@ -446,8 +446,8 @@ class TunnelServer {
           
           // Send frame message to tunnel client
           const frameMessage = {
-            type: 'websocket_frame',
-            upgradeId,
+          type: 'websocket_frame',
+          upgradeId,
             data: frameData,
             direction: 'to_local',
             originalSize: data.length
@@ -501,7 +501,7 @@ class TunnelServer {
         }
         
         // Forward frame from client to browser
-        const data = Buffer.from(message.data, 'base64');
+      const data = Buffer.from(message.data, 'base64');
         
         // Validate decoded data
         if (!data || data.length === 0) {
@@ -542,7 +542,7 @@ class TunnelServer {
           } catch (error) {
             console.error(`❌ Error creating WebSocket frame for browser: ${message.upgradeId}`, error);
             // Fallback: write raw data
-            pending.socket.write(data);
+      pending.socket.write(data);
           }
         } else {
           console.warn(`⚠️ Socket not writable or destroyed for ${message.upgradeId}`);

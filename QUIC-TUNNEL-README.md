@@ -43,7 +43,7 @@ Internet Users → claude.grabr.cc (QUIC Server) ←─ QUIC Connection ─→ Q
 ```bash
 npm run quic:server
 # or with custom ports
-node quic-tunnel-server.js --httpPort 80 --quicPort 4433
+node quic-tunnel-server.js --httpPort 80 --quicPort 8080
 ```
 
 ### **2. Start QUIC Client** (on your local machine)
@@ -71,7 +71,7 @@ for i in {1..10}; do curl https://claude.grabr.cc/ & done
 ```bash
 node quic-tunnel-server.js \
   --httpPort 80 \
-  --quicPort 4433 \
+  --quicPort 8080 \
   --domain grabr.cc
 ```
 
@@ -79,7 +79,7 @@ node quic-tunnel-server.js \
 ```bash
 node quic-tunnel-client.js 3008 myapp \
   --server-host your.server.com \
-  --quic-port 4433 \
+  --quic-port 8080 \
   --max-streams 1000 \
   --keep-alive 30000
 ```
@@ -308,7 +308,7 @@ npm run server     # Port 8080
 npm run client 3008 claude
 
 # QUIC tunnel (new)  
-npm run quic:server   # Port 4433
+npm run quic:server   # Port 8080
 npm run quic:client 3008 claude-quic
 
 # Test both:

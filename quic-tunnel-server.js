@@ -10,7 +10,7 @@ class QuicTunnelServer extends EventEmitter {
     super();
     this.config = {
       httpPort: process.env.SERVER_PORT || config.httpPort || 80,
-      quicPort: process.env.QUIC_PORT || config.quicPort || 4433,
+      quicPort: process.env.QUIC_PORT || config.quicPort || 8080,
       domain: config.domain || 'grabr.cc',
       ...config
     };

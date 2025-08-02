@@ -10,7 +10,7 @@ class QuicTunnelClient extends EventEmitter {
     this.config = {
       serverHost: config.serverHost || '20.193.143.179',
       serverPort: config.serverPort || 8080,
-      quicPort: config.quicPort || 4433,
+      quicPort: config.quicPort || 8080,
       localHost: config.localHost || 'localhost',
       localPort: config.localPort || 3000,
       suggestedSubdomain: config.suggestedSubdomain || null,

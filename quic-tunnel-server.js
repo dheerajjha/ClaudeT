@@ -13,9 +13,9 @@ class QuicTunnelServer extends EventEmitter {
   constructor(config = {}) {
     super();
     this.config = {
-      httpPort: process.env.SERVER_PORT || config.httpPort || 8999,
+      httpPort: process.env.SERVER_PORT || config.httpPort || 80,
       quicPort: process.env.QUIC_PORT || config.quicPort || 8080,
-      domain: config.domain || 'localhost',
+      domain: config.domain || 'grabr.cc',
       ...config
     };
     
@@ -181,7 +181,7 @@ class QuicTunnelServer extends EventEmitter {
         
         case 'connection_stats':
           // Handle periodic stats from client (just log for now)
-          // Client stats received (latency logging removed)
+          console.log(`📊 Client stats: ${message.activeStreams} active streams, ${message.latencyStats?.avg?.toFixed(1) || 0}ms avg latency`);
           break;
         
         default:
@@ -278,7 +278,7 @@ class QuicTunnelServer extends EventEmitter {
 
     // Calculate latency
     const latency = Date.now() - (message.timestamp || 0);
-              // Response processed (latency logging removed)
+    console.log(`⚡ QUIC Response latency: ${latency}ms (stream: ${streamId})`);
 
     // Decrement active streams
     const tunnel = Array.from(this.tunnels.values())

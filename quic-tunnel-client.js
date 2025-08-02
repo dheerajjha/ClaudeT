@@ -12,7 +12,7 @@ class QuicTunnelClient extends EventEmitter {
   constructor(config = {}) {
     super();
     this.config = {
-      serverHost: config.serverHost || '20.193.143.179',
+      serverHost: config.serverHost || 'localhost',
       serverPort: config.serverPort || 8080,
       quicPort: config.quicPort || 8080,
       localHost: config.localHost || 'localhost',
@@ -143,7 +143,7 @@ class QuicTunnelClient extends EventEmitter {
       capabilities: ['stream_multiplexing', 'connection_migration', 'low_latency']
     });
     
-    console.log(`🌍 QUIC tunnel available at: https://${this.tunnelId}.grabr.cc`);
+    console.log(`🌍 QUIC tunnel available at: http://localhost:8999`);
     console.log(`⚡ Features: ${this.config.maxStreams} concurrent streams, ultra-low latency`);
     
     this.emit('connected');
@@ -599,7 +599,7 @@ class QuicTunnelClient extends EventEmitter {
     
     // Log performance stats periodically
     if (this.latencyStats.samples.length % 20 === 0) {
-      console.log(`📊 QUIC Performance: ${this.latencyStats.min}ms min, ${this.latencyStats.avg.toFixed(1)}ms avg, ${this.latencyStats.max}ms max`);
+      // QUIC Performance stats (logging removed)
     }
   }
 
@@ -719,7 +719,7 @@ async function startClient() {
     
     console.log('🎉 QUIC/HTTP3 Tunnel Client Connected!');
     console.log(`📍 Local: http://${config.localHost}:${config.localPort}`);
-    console.log(`🌍 Public: https://${client.tunnelId}.grabr.cc`);
+    console.log(`🌍 Public: http://localhost:8999`);
     console.log(`⚡ Protocol: QUIC/HTTP3 (Ultra-low latency)`);
     console.log(`📊 Max Streams: ${config.maxStreams || 1000}`);
     console.log(`🔥 Features: Stream multiplexing, Connection migration, 0-RTT`);

@@ -29,11 +29,9 @@ class QuicTunnelServer extends EventEmitter {
   setupRoutes() {
     this.app.set('trust proxy', true);
     
-    // Body parsing middleware (more specific to avoid interfering with tunneled responses)
+    // Body parsing middleware (minimal to avoid interfering with tunneled responses)
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-    // Only use raw parsing for specific endpoints, not all requests
-    this.app.use('/api/*', express.raw({ limit: '10mb', type: '*/*' }));
 
     // Health check endpoint
     this.app.get('/health', (req, res) => {

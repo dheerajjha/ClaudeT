@@ -356,6 +356,13 @@ class QuicTunnelClient extends EventEmitter {
                      !contentType.includes('xml') &&
                      responseBody.length > 0;
 
+          // Debug logging for MIME type issues
+          if (url.includes('.js')) {
+            console.log(`🔍 JS file debug: ${method} ${url}`);
+            console.log(`🔍 Local Content-Type: ${contentType}`);
+            console.log(`🔍 All headers:`, res.headers);
+          }
+
           resolve({
             statusCode: res.statusCode,
             headers: res.headers,

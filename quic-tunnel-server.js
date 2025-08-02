@@ -142,12 +142,11 @@ class QuicTunnelServer extends EventEmitter {
   handleQuicMessage(connection, data) {
     try {
       const message = JSON.parse(data);
-      const tunnel = this.tunnels.get(connection.tunnelId);
       
-      if (!tunnel) return;
-
       // Update activity timestamp
       connection.lastActivity = Date.now();
+      
+      console.log(`📨 Received QUIC message: ${message.type} from ${connection.connectionId}`);
 
       switch (message.type) {
         case 'tunnel_info':
